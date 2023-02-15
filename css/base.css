@@ -1,4 +1,7 @@
 h1, a, p {font-family: "PingHei","Helvetica Neue","Helvetica","Arial","Verdana","sans-serif";}
 h1 {text-align: center;}
 a {color:#8ab4f8;text-decoration: none;}
-body {font-size: calc(3vw + 5px);}
+body {
+    font-size: calc(1vw + 16px);
+    font-size: 20px;
+}
