@@ -1,5 +1,9 @@
 ### Hi there 👋
 
+你好哇，我是KKGo，AI行业的从业者（程序猿、攻城狮）。对AI、通用人工智能、LLM模型（如GPT）、视觉模型非常感兴趣。
+
+更多介绍欢迎访问的主页 [www.KKGo1999.top](https://www.KKGo1999.top)
+
 <!--
 **KKGo1999/KKGo1999** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
