@@ -4,4 +4,9 @@ a {color:#8ab4f8;text-decoration: none;}
 body {
     font-size: calc(1vw + 16px);
     font-size: 20px;
+    margin: 0 auto;
 }
+@media only screen and (min-width: 501px) {
+    body {max-width: 500px;}
+}
+ul[name="nobullet"] {list-style: none;}
