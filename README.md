@@ -1,6 +1,12 @@
 ### Hi there 👋 (KKGo1999's profile)
-
 Hello，我是KK Go，AI行业的从业者（程序猿、攻城狮）。对AI、通用人工智能、LLM模型（如GPT）、视觉模型非常感兴趣。
+
+[![](https://shields.io/github/stars/kkgo1999/Stable-diffusion-person?style=social)](https://github.com/KKGo1999) &nbsp;
+[![](https://shields.io/twitter/follow/kkgo1999?label=Follow)](https://twitter.com/kkgo1999) &nbsp;
+[![](https://shields.io/youtube/channel/subscribers/UCx7EyuAEFfga6cTYABxlaCQ)](https://youtube.com/@KKGo1999) &nbsp;
+[![](https://img.shields.io/badge/bilibili-哔哩哔哩-critical)](https://space.bilibili.com/406715814) &nbsp;
+[![](https://img.shields.io/badge/WeChat-微信-brightgreen)](https://www.kkgo1999.top/img/kkgo1999.wechat.jpg)
+
 
 更多介绍欢迎访问的主页 [www.KKGo1999.top](https://www.KKGo1999.top)
 
