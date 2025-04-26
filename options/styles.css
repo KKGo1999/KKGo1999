@@ -1,0 +1,390 @@
+/* Light mode (default) variables */
+:root {
+    --bg-color: #f8f9fa;
+    --card-bg: #ffffff;
+    --card-header-bg: #343a40;
+    --card-header-color: #ffffff;
+    --text-color: #212529;
+    --table-header-bg: #f8f9fa;
+    --table-border: #dee2e6;
+    --table-hover: rgba(0, 123, 255, 0.1);
+    --table-selected: rgba(0, 123, 255, 0.2);
+    --table-primary-bg: #b8daff;
+    --table-success-bg: #c3e6cb;
+    --table-light-bg: #f8f9fa;
+    --positive-color: #28a745;
+    --negative-color: #dc3545;
+    --border-color: rgba(0,0,0,0.1);
+    --table-selected-border: #007bff;
+    --table-alternate-row: rgba(0,0,0,0.02);
+    --sort-icon-color: #6c757d;
+}
+
+/* Dark mode variables */
+[data-theme="dark"] {
+    --bg-color: #212529;
+    --card-bg: #343a40;
+    --card-header-bg: #212529;
+    --card-header-color: #ffffff;
+    --text-color: #f8f9fa;
+    --table-header-bg: #2c3034;
+    --table-border: #495057;
+    --table-hover: rgba(33, 136, 255, 0.2);
+    --table-selected: rgba(33, 136, 255, 0.3);
+    --table-primary-bg: #0d6efd;
+    --table-success-bg: #198754;
+    --table-light-bg: #343a40;
+    --positive-color: #42d86c;
+    --negative-color: #ff5c6c;
+    --border-color: rgba(255,255,255,0.1);
+    --table-selected-border: #0d6efd;
+    --table-alternate-row: rgba(255,255,255,0.05);
+    --sort-icon-color: #adb5bd;
+}
+
+/* Basic theme styles */
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: all 0.3s ease;
+}
+
+.card {
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    background-color: var(--card-bg);
+    transition: all 0.3s ease;
+    border-color: var(--table-border);
+}
+
+.card-header {
+    background-color: var(--card-header-bg);
+    color: var(--card-header-color);
+    font-weight: bold;
+    border-bottom-color: var(--table-border);
+}
+
+.card-body {
+    background-color: var(--card-bg);
+}
+
+/* Table styles */
+.table {
+    color: var(--text-color);
+    border-color: var(--table-border);
+}
+
+.table th {
+    position: sticky;
+    top: 0;
+    background-color: var(--table-header-bg);
+    color: var(--text-color);
+    border-color: var(--table-border);
+}
+
+.table td {
+    color: var(--text-color);
+    border-color: var(--table-border);
+}
+
+.table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.table-bordered {
+    border-color: var(--table-border);
+}
+
+.table-bordered th,
+.table-bordered td {
+    border-color: var(--table-border);
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--table-hover);
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: var(--table-alternate-row);
+}
+
+/* Table row states */
+.table-primary {
+    background-color: var(--table-primary-bg) !important;
+    color: var(--card-header-color);
+}
+
+.table-success {
+    background-color: var(--table-success-bg) !important;
+    color: var(--card-header-color);
+}
+
+.table-light {
+    background-color: var(--table-light-bg) !important;
+    color: var(--text-color);
+}
+
+/* Fix for dark mode table hovers */
+.table-primary:hover,
+.table-success:hover,
+.table-light:hover {
+    background-color: var(--table-hover) !important;
+}
+
+.nav-tabs .nav-link {
+    color: var(--text-color);
+}
+
+.nav-tabs .nav-link.active {
+    font-weight: bold;
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    border-bottom-color: var(--card-bg);
+}
+
+.stock-info {
+    padding: 10px;
+    border-radius: 5px;
+    background-color: var(--table-light-bg);
+}
+
+.positive-change {
+    color: var(--positive-color);
+}
+
+.negative-change {
+    color: var(--negative-color);
+}
+
+.data-source-indicator {
+    font-size: 0.9rem;
+    text-align: center;
+    margin-bottom: 15px;
+    border-radius: 4px;
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+#optionsTable tbody tr:hover {
+    background-color: var(--table-hover);
+    cursor: pointer;
+}
+
+#strategyLegs .list-group-item {
+    padding: 0.5rem 1rem;
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    border-color: var(--table-border);
+}
+
+@media (max-width: 768px) {
+    .card-header {
+        padding: 0.5rem;
+    }
+    
+    .card-body {
+        padding: 0.75rem;
+    }
+    
+    .table th, .table td {
+        padding: 0.4rem;
+    }
+    
+    .h4 {
+        font-size: 1.2rem;
+    }
+}
+
+/* 期权链表格样式 */
+#optionsData tr {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#optionsData tr:hover {
+    background-color: var(--table-hover) !important;
+}
+
+#optionsData tr.selected {
+    background-color: var(--table-selected) !important;
+    border-left: 3px solid var(--table-selected-border);
+    font-weight: 500;
+}
+
+/* Also apply to candidates list */
+#candidatesList tr {
+    transition: all 0.2s ease;
+}
+
+#candidatesList tr:hover {
+    background-color: var(--table-hover) !important;
+}
+
+/* Fix table colors in dark mode for Bootstrap tables */
+[data-theme="dark"] .table {
+    --bs-table-color: var(--text-color);
+    --bs-table-bg: var(--card-bg);
+    --bs-table-border-color: var(--table-border);
+    --bs-table-striped-bg: var(--table-alternate-row);
+    --bs-table-striped-color: var(--text-color);
+    --bs-table-active-bg: var(--table-hover);
+    --bs-table-active-color: var(--text-color);
+    --bs-table-hover-bg: var(--table-hover);
+    --bs-table-hover-color: var(--text-color);
+}
+
+/* 表格滚动区域 */
+.table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+    border-color: var(--table-border);
+}
+
+/* 表头固定 */
+.table-responsive thead th {
+    position: sticky;
+    top: 0;
+    background-color: var(--table-header-bg);
+    z-index: 10;
+    box-shadow: 0 1px 2px var(--border-color);
+}
+
+/* Fix form controls in dark mode */
+[data-theme="dark"] .form-control {
+    background-color: var(--table-light-bg);
+    border-color: var(--table-border);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .form-control:focus {
+    background-color: var(--table-light-bg);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .form-select {
+    background-color: var(--table-light-bg);
+    border-color: var(--table-border);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .btn-outline-danger {
+    color: var(--negative-color);
+    border-color: var(--negative-color);
+}
+
+[data-theme="dark"] .btn-outline-danger:hover {
+    background-color: var(--negative-color);
+    color: #fff;
+}
+
+/* Fix alerts in dark mode */
+[data-theme="dark"] .alert-info {
+    background-color: #0d6efd20;
+    color: var(--text-color);
+    border-color: #0d6efd;
+}
+
+[data-theme="dark"] .alert-warning {
+    background-color: #ffc10720;
+    color: var(--text-color);
+    border-color: #ffc107;
+}
+
+/* 数据源指示器 */
+.data-source-indicator {
+    border-radius: 4px;
+    font-size: 0.9rem;
+    transition: opacity 0.5s;
+    background-color: var(--card-bg);
+}
+
+/* Theme switch styles */
+.theme-switch-wrapper {
+    display: flex;
+    align-items: center;
+    margin: 0 10px;
+}
+
+.theme-switch {
+    display: inline-block;
+    height: 24px;
+    position: relative;
+    width: 48px;
+}
+
+.theme-switch input {
+    display: none;
+}
+
+.slider {
+    background-color: #ccc;
+    bottom: 0;
+    cursor: pointer;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    background-color: white;
+    bottom: 4px;
+    content: "";
+    height: 16px;
+    left: 4px;
+    position: absolute;
+    transition: .4s;
+    width: 16px;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: #2196F3;
+}
+
+input:checked + .slider:before {
+    transform: translateX(24px);
+}
+
+/* Sortable table styles */
+.sortable-table .sortable {
+    cursor: pointer;
+    position: relative;
+    padding-right: 18px; /* Space for the sort indicator */
+    user-select: none;
+}
+
+.sortable-table .sortable:hover {
+    background-color: var(--table-hover);
+}
+
+.sortable-table .sortable::after {
+    content: '↕'; /* Default - both arrows */
+    position: absolute;
+    right: 5px;
+    color: var(--sort-icon-color);
+    opacity: 0.4;
+    font-size: 0.8em;
+}
+
+.sortable-table .sortable.sort-asc::after {
+    content: '↑'; /* Up arrow */
+    opacity: 1;
+}
+
+.sortable-table .sortable.sort-desc::after {
+    content: '↓'; /* Down arrow */
+    opacity: 1;
+}
+
+.sortable-table th.active-sort {
+    background-color: var(--table-hover);
+    font-weight: bold;
+}

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .hidden {
+            display: none;
+        }
+        .negative {
+            color: #dc3545;
+        }
+        .positive {
+            color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>价格计算器</h2>
+        <div class="input-group">
+            <label for="currentPrice">当前价格:</label>
+            <input type="number" id="currentPrice" placeholder="输入当前价格" step="0.01" min="0">
+        </div>
+        
+        <div class="input-group">
+            <label for="targetPrice">目标价格:</label>
+            <input type="number" id="targetPrice" placeholder="输入目标价格" step="0.01" min="0">
+        </div>
+        
+        <div id="ratioResult" class="hidden">
+            <h3>价格比率</h3>
+            <p>相对于当前价格的变化率: <span id="priceRatio" class="negative"></span></p>
+        </div>
+        
+        <div id="resultsContainer" class="hidden">
+            <h3>目标价格</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>折扣率</th>
+                        <th>目标价格</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTable">
+                    <!-- Results will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPriceInput = document.getElementById('currentPrice');
+            const targetPriceInput = document.getElementById('targetPrice');
+            const resultsContainer = document.getElementById('resultsContainer');
+            const resultsTable = document.getElementById('resultsTable');
+            const ratioResult = document.getElementById('ratioResult');
+            const priceRatio = document.getElementById('priceRatio');
+            
+            currentPriceInput.addEventListener('input', function() {
+                calculateTargetPrices();
+                calculateRatio();
+            });
+            
+            targetPriceInput.addEventListener('input', calculateRatio);
+            
+            function calculateRatio() {
+                const currentPrice = parseFloat(currentPriceInput.value);
+                const targetPrice = parseFloat(targetPriceInput.value);
+                
+                if (isNaN(currentPrice) || currentPrice <= 0 || isNaN(targetPrice) || targetPrice <= 0) {
+                    ratioResult.classList.add('hidden');
+                    return;
+                }
+                
+                const ratio = ((targetPrice / currentPrice) - 1) * 100;
+                priceRatio.textContent = `${ratio.toFixed(2)}%`;
+                priceRatio.className = ratio >= 0 ? 'positive' : 'negative';
+                ratioResult.classList.remove('hidden');
+            }
+            
+            function calculateTargetPrices() {
+                const currentPrice = parseFloat(currentPriceInput.value);
+                
+                if (isNaN(currentPrice) || currentPrice <= 0) {
+                    resultsContainer.classList.add('hidden');
+                    return;
+                }
+                
+                resultsContainer.classList.remove('hidden');
+                resultsTable.innerHTML = '';
+                
+                // Calculate target prices from -10% to -60% in steps of -10%
+                for (let discount = -10; discount >= -60; discount -= 10) {
+                    const targetPrice = currentPrice * (1 + discount / 100);
+                    const row = document.createElement('tr');
+                    
+                    row.innerHTML = `
+                        <td class="negative">${discount}%</td>
+                        <td>${targetPrice.toFixed(2)}</td>
+                    `;
+                    
+                    resultsTable.appendChild(row);
+                }
+            }
+        });
+    </script>
+</body>
+</html> 
