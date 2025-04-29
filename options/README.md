@@ -11,25 +11,25 @@
   - 蝶式策略 (Butterfly Spread)
   - 跨式策略 (Straddle)
 - **数据源支持**：
-  - Finnhub API (提供实时股票和期权数据)
+  - Tradier API (提供实时股票和期权数据)
   - 内置模拟数据 (无API密钥时的备选方案)
 - **可视化**：使用Chart.js显示直观的价格分布、波动率微笑和收益曲线图表
 
 ## 设置指南
 
-### 1. 获取Finnhub API密钥
+### 1. 获取Tradier API密钥
 
-为了获取真实的期权链数据，推荐使用Finnhub API。请按照以下步骤获取API密钥：
+为了获取真实的期权链数据，推荐使用Tradier API。请按照以下步骤获取API密钥：
 
-1. 访问 [Finnhub开发者网站](https://finnhub.io/register)
-2. 创建一个免费账户
-3. 完成注册后，您将获得一个API密钥
-4. 应用内配置：点击应用中的"配置Finnhub API密钥"按钮，输入您的API密钥
+1. 访问 [Tradier开发者网站](https://developer.tradier.com/)
+2. 创建一个账户
+3. 申请API访问权限并获取您的访问令牌（Bearer Token）
+4. 应用内配置：点击应用中的"配置Tradier API密钥"按钮，输入您的API密钥
 
-**Finnhub免费计划包括：**
-- 每分钟60次API调用
-- 每月总计25,000次API调用
-- 包含基本的股票和期权数据
+**Tradier API特点：**
+- 提供实时股票和期权数据
+- 包含希腊字母和隐含波动率信息
+- 需要有效的Tradier账户
 
 ### 2. 运行应用程序
 
@@ -53,7 +53,7 @@
 
 应用程序提供了两种配置API密钥的方式：
 
-1. **通过UI界面**：点击"配置Finnhub API密钥"按钮，在弹出的对话框中输入API密钥
+1. **通过UI界面**：点击"配置Tradier API密钥"按钮，在弹出的对话框中输入API密钥
    - 此密钥将保存在浏览器的localStorage中，下次访问时自动使用
    - 密钥不会被发送到任何服务器
 
@@ -63,10 +63,10 @@
 
 应用程序支持两种数据模式：
 
-1. **真实期权数据（Finnhub API）**：
+1. **真实期权数据（Tradier API）**：
    - 提供市场期权链数据
-   - 需要有效的Finnhub API密钥
-   - 免费版每分钟限制60次请求，每月25,000次
+   - 需要有效的Tradier API密钥
+   - 包含完整的希腊字母数据
    - 如果API调用失败，会自动回退到模拟数据
 
 2. **模拟数据**：
@@ -82,4 +82,4 @@
 - **UI组件**：Bootstrap 5
 - **图表可视化**：Chart.js
 - **数学模型**：Black-Scholes期权定价模型
-- **API集成**：Finnhub API
+- **API集成**：Tradier API

@@ -189,12 +189,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const apiKeyContainer = document.createElement('div');
             apiKeyContainer.className = 'api-key-config text-center mt-2 mb-3';
             
-            const finnhubKeyButton = document.createElement('button');
-            finnhubKeyButton.textContent = '配置Finnhub API密钥';
-            finnhubKeyButton.className = 'btn btn-sm btn-outline-primary me-2';
-            finnhubKeyButton.addEventListener('click', () => configureApiKey('finnhub'));
+            const tradierKeyButton = document.createElement('button');
+            tradierKeyButton.textContent = '配置Tradier API密钥';
+            tradierKeyButton.className = 'btn btn-sm btn-outline-primary me-2';
+            tradierKeyButton.addEventListener('click', () => configureApiKey('tradier'));
             
-            apiKeyContainer.appendChild(finnhubKeyButton);
+            apiKeyContainer.appendChild(tradierKeyButton);
             document.querySelector('.options-container').prepend(apiKeyContainer);
             
             // 初始化数据源指示器
@@ -757,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 保存当前数据源，以便检测是否发生自动切换
             const currentSource = apiService.dataSource;
-            const sourceName = 'Finnhub';
+            const sourceName = 'Tradier';
             
             // 获取期权链数据
             let optionsChain;
@@ -1367,7 +1367,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const indicator = document.getElementById('dataSourceIndicator');
         const strategyIndicator = document.getElementById('strategyDataSourceIndicator');
         
-        const currentSource = 'Finnhub';
+        const currentSource = 'Tradier';
         
         if (indicator) {
             indicator.innerHTML = `
@@ -1406,7 +1406,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentKey = apiService.getApiKey(source);
         
         const newKey = prompt(
-            `请输入Finnhub API密钥:`, 
+            `请输入Tradier API密钥:`, 
             currentKey || 'cju2rn9r01qr958213c0cju2rn9r01qr958213cg'
         );
         
@@ -1414,7 +1414,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const formattedKey = newKey.trim();
             if (apiService.setApiKey(source, formattedKey)) {
                 // 更新成功
-                alert(`Finnhub密钥已更新!`);
+                alert(`Tradier密钥已更新!`);
                 
                 // 刷新数据
                 if (apiService.dataSource === source) {
@@ -1427,8 +1427,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // 检查localStorage中是否有保存的API密钥
-    if (localStorage.getItem('finnhubApiKey')) {
-        apiService.finnhubKey = localStorage.getItem('finnhubApiKey');
+    if (localStorage.getItem('tradierApiKey')) {
+        apiService.tradierKey = localStorage.getItem('tradierApiKey');
         apiService.useRealOptionsData = true;
     }
 

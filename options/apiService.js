@@ -1,15 +1,11 @@
 class APIService {
     constructor() {
-        // Finnhub API配置
-        //this.finnhubKey = 'cvoe1h1r01qppf5ch410cvoe1h1r01qppf5ch41g'; // Finnhub API Key
-        this.finnhubKey = 'd024ba9r01qt2u31ue8gd024ba9r01qt2u31ue90'
-        this.finnhubUrl = 'https://finnhub.io/api/v1';
+        // Tradier API配置
+        this.tradierKey = ''; // Tradier API Key (Bearer Token)
+        this.tradierUrl = 'https://api.tradier.com/v1';
         
-        // 默认使用 Finnhub
-        this.dataSource = 'finnhub';
-        
-        // CORS代理，用于避免跨域问题
-        this.corsProxy = 'https://corsproxy.io/?url='; //key=bc613458&url=
+        // 默认使用 Tradier
+        this.dataSource = 'tradier';
         
         // 是否显示调试信息
         this.debug = true;
@@ -17,7 +13,7 @@ class APIService {
     
     // 获取当前数据源名称
     getDataSourceName() {
-        return 'Finnhub';
+        return 'Tradier';
     }
     
     // 调试日志
@@ -44,22 +40,26 @@ class APIService {
     async getStockPrice(symbol) {
         try {
             this.logDebug(`正在获取${symbol}的股票价格`);
-            return await this._getFinnhubStockPrice(symbol);
+            return await this._getTradierStockPrice(symbol);
         } catch (error) {
             this.logError(`获取${symbol}股票价格失败`, error);
             throw error;
         }
     }
     
-    // 从Finnhub获取股票价格
-    async _getFinnhubStockPrice(symbol) {
+    // 从Tradier获取股票价格
+    async _getTradierStockPrice(symbol) {
         try {
-            // 构建正确的URL，使API参数能正确传递给Finnhub
-            const finnhubUrl = `${this.finnhubUrl}/quote?symbol=${symbol}&token=${this.finnhubKey}`;
-            const url = `${this.corsProxy}${encodeURIComponent(finnhubUrl)}`;
+            // 构建API请求URL
+            const url = `${this.tradierUrl}/markets/quotes?symbols=${symbol}`;
             
             this.logDebug(`请求URL: ${url}`);
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${this.tradierKey}`,
+                    'Accept': 'application/json'
+                }
+            });
             
             if (!response.ok) {
                 throw new Error(`HTTP错误: ${response.status}`);
@@ -67,12 +67,13 @@ class APIService {
             
             const data = await response.json();
             
-            if (data && data.c > 0) {
-                const price = data.c;
-                const change = data.d;
-                const changePct = data.dp;
+            if (data && data.quotes && data.quotes.quote) {
+                const quote = Array.isArray(data.quotes.quote) ? data.quotes.quote[0] : data.quotes.quote;
+                const price = quote.last;
+                const change = quote.change;
+                const changePct = quote.change_percentage;
                 
-                this.logDebug('Successfully fetched Finnhub data', { price, change, changePct });
+                this.logDebug('Successfully fetched Tradier data', { price, change, changePct });
                 
                 return {
                     price,
@@ -80,11 +81,11 @@ class APIService {
                     changePct
                 };
             } else {
-                this.logDebug('No Finnhub data available');
+                this.logDebug('No Tradier data available');
                 throw new Error(`无法获取${symbol}的股票价格`);
             }
         } catch (error) {
-            this.logError('Error fetching Finnhub stock price', error);
+            this.logError('Error fetching Tradier stock price', error);
             throw error;
         }
     }
@@ -93,45 +94,64 @@ class APIService {
     async getOptionsExpiryDates(symbol) {
         try {
             this.logDebug(`正在获取${symbol}的期权到期日`);
-            return await this._getFinnhubOptionsExpiryDates(symbol);
+            return await this._getTradierOptionsExpiryDates(symbol);
         } catch (error) {
             this.logError(`获取${symbol}期权到期日失败`, error);
             throw error;
         }
     }
     
-    // 从Finnhub获取期权到期日
-    async _getFinnhubOptionsExpiryDates(symbol) {
+    // 从Tradier获取期权到期日
+    async _getTradierOptionsExpiryDates(symbol) {
         try {
-            // 构建正确的URL，使API参数能正确传递给Finnhub
-            const finnhubUrl = `${this.finnhubUrl}/stock/option-chain?symbol=${symbol}&token=${this.finnhubKey}`;
-            const url = `${this.corsProxy}${encodeURIComponent(finnhubUrl)}`;
+            // 构建API请求URL
+            const url = `${this.tradierUrl}/markets/options/expirations?symbol=${symbol}&includeAllRoots=true`;
             
             this.logDebug(`请求URL: ${url}`);
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${this.tradierKey}`,
+                    'Accept': 'application/json'
+                }
+            });
             
             if (!response.ok) {
                 throw new Error(`HTTP错误: ${response.status}`);
             }
             
             const data = await response.json();
+            console.log('Expirations response:', data);
             
-            if (data && data.data && data.data.length > 0) {
-                // 提取不重复的到期日
-                const datesSet = new Set(data.data.map(item => item.expirationDate));
-                const dates = [...datesSet];
+            if (data && data.expirations) {
+                let dates = [];
+                
+                // 处理 date 字段是数组的情况
+                if (data.expirations.date && Array.isArray(data.expirations.date)) {
+                    dates = data.expirations.date;
+                }
+                // 处理 date 字段是单个字符串的情况
+                else if (data.expirations.date) {
+                    dates = [data.expirations.date];
+                }
+                // 兼容旧格式：处理 expiration 字段的情况
+                else if (data.expirations.expiration) {
+                    // 提取不重复的到期日
+                    dates = Array.isArray(data.expirations.expiration) 
+                        ? data.expirations.expiration.map(item => item.date)
+                        : [data.expirations.expiration.date];
+                }
                 
                 // 按日期排序
                 dates.sort();
                 
-                this.logDebug(`从Finnhub获取了${dates.length}个到期日`);
+                this.logDebug(`从Tradier获取了${dates.length}个到期日`);
                 return dates;
             } else {
-                this.logDebug('No Finnhub expiry dates available');
+                this.logDebug('No Tradier expiry dates available');
                 throw new Error(`无法获取${symbol}的期权到期日`);
             }
         } catch (error) {
-            this.logError('Error fetching Finnhub expiry dates', error);
+            this.logError('Error fetching Tradier expiry dates', error);
             throw error;
         }
     }
@@ -140,7 +160,7 @@ class APIService {
     async getOptionsChain(symbol, expiryDate, optionType) {
         try {
             this.logDebug(`正在获取${symbol}的期权链 (到期日: ${expiryDate}, 类型: ${optionType})`);
-            return await this._getFinnhubOptionsChain(symbol, expiryDate, optionType);
+            return await this._getTradierOptionsChain(symbol, expiryDate, optionType);
         } catch (error) {
             this.logError(`获取${symbol}期权链失败`, error);
             throw error;
@@ -149,9 +169,9 @@ class APIService {
     
     // 设置API密钥
     setApiKey(source, newKey) {
-        if (source === 'finnhub') {
-            this.finnhubKey = newKey;
-            localStorage.setItem('finnhubApiKey', newKey);
+        if (source === 'tradier') {
+            this.tradierKey = newKey;
+            localStorage.setItem('tradierApiKey', newKey);
             return true;
         }
         return false;
@@ -159,104 +179,88 @@ class APIService {
     
     // 获取API密钥
     getApiKey(source) {
-        if (source === 'finnhub') {
-            return this.finnhubKey;
+        if (source === 'tradier') {
+            return this.tradierKey;
         }
         return null;
     }
     
-    // 从Finnhub获取期权链数据
-    async _getFinnhubOptionsChain(symbol, expiryDate, optionType) {
+    // 从Tradier获取期权链数据
+    async _getTradierOptionsChain(symbol, expiryDate, optionType) {
         try {
-            // 构建正确的URL，使API参数能正确传递给Finnhub
-            const finnhubUrl = `${this.finnhubUrl}/stock/option-chain?symbol=${symbol}&token=${this.finnhubKey}`;
-            const url = `${this.corsProxy}${encodeURIComponent(finnhubUrl)}`;
+            // 构建API请求URL
+            const url = `${this.tradierUrl}/markets/options/chains?symbol=${symbol}&expiration=${expiryDate}&greeks=true`;
             
             this.logDebug(`请求URL: ${url}`);
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${this.tradierKey}`,
+                    'Accept': 'application/json'
+                }
+            });
             
             if (!response.ok) {
                 throw new Error(`HTTP错误: ${response.status}`);
             }
             
             const data = await response.json();
-            console.log('=== Finnhub API响应 ===');
+            console.log('=== Tradier API响应 ===');
             console.log(JSON.stringify(data, null, 2));
             
             // 检查响应格式是否正确
-            if (!data || !data.data) {
-                this.logDebug('No Finnhub options data available or invalid format');
+            if (!data || !data.options || !data.options.option) {
+                this.logDebug('No Tradier options data available or invalid format');
                 throw new Error(`无法获取${symbol}的期权数据`);
             }
             
-            // 检查该结构是否使用新的格式（包含options字段）
-            if (data.data && Array.isArray(data.data)) {
-                // 处理包含data数组的响应格式
-                const expiryItem = data.data.find(item => item.expirationDate === expiryDate);
-                this.logDebug(`在data数组中查找到期日: ${expiryDate}, 找到: ${expiryItem ? 'yes' : 'no'}`);
-                
-                if (!expiryItem && data.data.length > 0) {
-                    // 输出可用的到期日，帮助调试
-                    const availableDates = data.data.map(item => item.expirationDate);
-                    this.logDebug(`可用到期日: ${availableDates.join(', ')}`);
-                }
-
-                if (!expiryItem) {
-                    this.logDebug(`无法找到${expiryDate}到期的期权，可用到期日:`, 
-                        data.data ? data.data.map(item => item.expirationDate).join(", ") : "无");
-                    throw new Error(`无法找到${symbol}在${expiryDate}到期的期权`);
-                }
-                
-                this.logDebug(`找到期权到期日: ${expiryItem.expirationDate}`);
-                
-                // 确认有options字段和相应类型的期权数据
-                if (!expiryItem.options || !expiryItem.options[optionType.toUpperCase()]) {
-                    this.logDebug(`无法找到${expiryDate}到期的${optionType}期权，options结构:`, expiryItem.options ? Object.keys(expiryItem.options) : 'null');
-                    throw new Error(`无法找到${symbol}在${expiryDate}到期的${optionType}期权`);
-                }
-                
-                const optionsArray = expiryItem.options[optionType.toUpperCase()];
-                
-                // 记录找到的期权数量
-                if (Array.isArray(optionsArray)) {
-                    this.logDebug(`从Finnhub获取了${optionsArray.length}个${optionType}期权`);
-                } else {
-                    this.logDebug(`Finnhub返回了非数组格式的期权数据:`, typeof optionsArray);
-                    throw new Error(`Finnhub返回了无效的期权数据格式`);
-                }
-                
-                // 从Finnhub响应中提取所需的字段
-                const optionsChain = optionsArray.map(option => {
-                    return {
-                        strike: parseFloat(option.strike) || 0,
-                        lastPrice: parseFloat(option.lastPrice) || 0,
-                        bid: parseFloat(option.bid) || 0,
-                        ask: parseFloat(option.ask) || 0,
-                        volume: parseInt(option.volume) || 0,
-                        openInterest: parseInt(option.openInterest) || 0,
-                        impliedVolatility: parseFloat(option.impliedVolatility) / 100 || 0, // 将百分比转换为小数
-                        delta: parseFloat(option.delta) || 0,
-                        gamma: parseFloat(option.gamma) || 0,
-                        theta: parseFloat(option.theta) || 0,
-                        vega: parseFloat(option.vega) || 0
-                    };
-                });
-                
-                this.logDebug(`成功解析了${optionsChain.length}个期权合约`);
-                
-                // 按执行价排序
-                return optionsChain.sort((a, b) => a.strike - b.strike);
-            } else {
-                 // Fallback for older format or other structures (if any)
-                 // You might need to adjust this part if Finnhub has other response structures
-                this.logDebug(`Finnhub响应不是预期的数组格式，尝试旧格式解析`);
-                // Fallback logic to handle older Finnhub format if needed
-                // For now, we assume the new format is standard
-                 throw new Error(`无法处理的Finnhub响应格式`);
+            // Tradier API返回所有期权（看涨和看跌），我们需要根据optionType筛选
+            let optionsArray = data.options.option;
+            
+            // 确保optionsArray是数组
+            if (!Array.isArray(optionsArray)) {
+                optionsArray = [optionsArray];
             }
             
+            // 根据期权类型筛选
+            const filteredOptions = optionsArray.filter(option => 
+                option.option_type.toLowerCase() === optionType.toLowerCase()
+            );
+            
+            // 记录找到的期权数量
+            this.logDebug(`从Tradier获取了${filteredOptions.length}个${optionType}期权`);
+            
+            if (filteredOptions.length === 0) {
+                this.logDebug(`无法找到${expiryDate}到期的${optionType}期权`);
+                throw new Error(`无法找到${symbol}在${expiryDate}到期的${optionType}期权`);
+            }
+            
+            // 从Tradier响应中提取所需的字段
+            const optionsChain = filteredOptions.map(option => {
+                // 使用希腊字母数据（如果有）
+                const greeks = option.greeks || {};
+                
+                return {
+                    strike: parseFloat(option.strike) || 0,
+                    lastPrice: parseFloat(option.last) || 0,
+                    bid: parseFloat(option.bid) || 0,
+                    ask: parseFloat(option.ask) || 0,
+                    volume: parseInt(option.volume) || 0,
+                    openInterest: parseInt(option.open_interest) || 0,
+                    impliedVolatility: parseFloat(greeks.mid_iv) || 0,
+                    delta: parseFloat(greeks.delta) || 0,
+                    gamma: parseFloat(greeks.gamma) || 0,
+                    theta: parseFloat(greeks.theta) || 0,
+                    vega: parseFloat(greeks.vega) || 0
+                };
+            });
+            
+            this.logDebug(`成功解析了${optionsChain.length}个期权合约`);
+            
+            // 按执行价排序
+            return optionsChain.sort((a, b) => a.strike - b.strike);
+            
         } catch (error) {
-            this.logError('Error fetching options chain from Finnhub', error);
+            this.logError('Error fetching options chain from Tradier', error);
             throw error;
         }
     }
@@ -267,6 +271,11 @@ const apiService = new APIService();
 
 // 在控制台公开API服务，方便调试
 window.apiService = apiService;
+
+// 初始化时从本地存储加载API密钥
+if (localStorage.getItem('tradierApiKey')) {
+    apiService.tradierKey = localStorage.getItem('tradierApiKey');
+}
 
 stockSelect.addEventListener('change', async () => {
     const symbol = stockSelect.value.trim();
@@ -302,15 +311,12 @@ async function loadStockData(symbol) {
         const data = await apiService.getStockPrice(symbol); 
         currentPrice.textContent = `当前价格: $${data.price.toFixed(2)}`;
         
-        updateDataSourceIndicator(true);
-        
         await loadExpiryDates(symbol); 
         
         return data;
         
     } catch (error) {
         console.error('Error loading stock data:', error);
-        updateDataSourceIndicator(false);
         expirySelect.innerHTML = '<option value="">获取到期日失败</option>';
         optionsData.innerHTML = '<tr><td colspan="14" class="text-center">加载期权数据出错: ' + error.message + '</td></tr>';
         return null;
