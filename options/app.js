@@ -16,22 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const candidatesList = document.getElementById('candidatesList');
     const clearCandidates = document.getElementById('clearCandidates');
     const filterOptionsTable = document.getElementById('filterOptionsTable');
-    
-    // DOM元素 - 策略分析
-    const strategyStockSelect = document.getElementById('strategyStockSelect');
-    const strategyExpiry = document.getElementById('strategyExpiry');
-    const strategyIV = document.getElementById('strategyIV');
-    const strategyType = document.getElementById('strategyType');
-    const strikeInputs = document.getElementById('strikeInputs');
-    const calculateStrategy = document.getElementById('calculateStrategy');
-    
-    // 策略结果显示元素
-    const strategyNameDisplay = document.getElementById('strategyNameDisplay');
-    const strategyCost = document.getElementById('strategyCost');
-    const strategyMaxProfit = document.getElementById('strategyMaxProfit');
-    const strategyMaxLoss = document.getElementById('strategyMaxLoss');
-    const strategyBreakEven = document.getElementById('strategyBreakEven');
-    const legsListDisplay = document.getElementById('legsListDisplay');
+    const tradierKeyButton = document.getElementById('tradierKeyButton');
     
     // 候选列表数据
     let candidateOptions = [];
@@ -108,11 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const defaultSymbol = stockSelect.value;
             if (defaultSymbol && defaultSymbol.trim() !== '') {
                 await loadStockData(defaultSymbol);
-                
-                // 初始化策略相关内容
-                await loadStrategyStockData(strategyStockSelect.value);
-                await loadStrategyExpiryDates(strategyStockSelect.value);
-                updateStrategyInputs();
             } else {
                 showMessage('请选择一个有效的股票代码', true);
                 expirySelect.innerHTML = '<option value="">请选择一个股票</option>';
@@ -136,23 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
             expirySelect.addEventListener('change', loadOptionsChain);
             callOption.addEventListener('change', loadOptionsChain);
             putOption.addEventListener('change', loadOptionsChain);
-            
-            strategyStockSelect.addEventListener('change', async () => {
-                const symbol = strategyStockSelect.value;
-                if (symbol && symbol.trim() !== '') {
-                    await loadStrategyStockData(symbol);
-                    await loadStrategyExpiryDates(symbol);
-                    updateStrategyInputs();
-                } else {
-                    console.error('Selected strategy symbol is empty or invalid');
-                    showMessage('请选择一个有效的股票代码进行策略分析', true);
-                }
-            });
-            
-            strategyExpiry.addEventListener('change', updateStrategyInputs);
-            strategyType.addEventListener('change', updateStrategyInputs);
-            strategyIV.addEventListener('input', updateStrategyInputs);
-            calculateStrategy.addEventListener('click', calculateAndDisplayStrategy);
             
             selectAllOptions.addEventListener('change', function() {
                 const checkboxes = document.querySelectorAll('#optionsData input[type="checkbox"]');
@@ -197,17 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
             dataSourceContainer.className = 'data-source-indicator text-center mb-2';
             document.querySelector('.options-container').prepend(dataSourceContainer);
             
-            // 添加API密钥配置按钮
-            const apiKeyContainer = document.createElement('div');
-            apiKeyContainer.className = 'api-key-config text-center mt-2 mb-3';
-            
-            const tradierKeyButton = document.createElement('button');
-            tradierKeyButton.textContent = '配置Tradier API密钥';
-            tradierKeyButton.className = 'btn btn-sm btn-outline-primary me-2';
+            // 添加API密钥配置按钮事件监听
             tradierKeyButton.addEventListener('click', () => configureApiKey('tradier'));
-            
-            apiKeyContainer.appendChild(tradierKeyButton);
-            document.querySelector('.options-container').prepend(apiKeyContainer);
             
             // 初始化数据源指示器
             updateDataSourceIndicator(true);
@@ -351,283 +305,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error loading expiry dates:', error);
             expirySelect.innerHTML = '<option value="">获取到期日失败</option>';
             updateDataSourceIndicator(false);
-        }
-    }
-    
-    // 策略分析 - 加载股票数据
-    async function loadStrategyStockData(symbol) {
-        try {
-            // 加载股票价格
-            const data = await apiService.getStockPrice(symbol);
-            
-            // 加载期权到期日
-            const dates = await apiService.getOptionsExpiryDates(symbol);
-            
-            // 更新下拉菜单
-            strategyExpiry.innerHTML = '';
-            dates.forEach(date => {
-                const option = document.createElement('option');
-                option.value = date;
-                option.textContent = new Date(date).toLocaleDateString(undefined, { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric' 
-                });
-                strategyExpiry.appendChild(option);
-            });
-            
-            // 更新执行价输入框
-            updateStrategyInputs();
-        } catch (error) {
-            console.error('Error loading strategy stock data:', error);
-        }
-    }
-    
-    // 加载策略到期日
-    async function loadStrategyExpiryDates(symbol) {
-        try {
-            // 加载期权到期日
-            const dates = await apiService.getOptionsExpiryDates(symbol);
-            
-            // 更新下拉菜单
-            strategyExpiry.innerHTML = '';
-            
-            if (dates.length === 0) {
-                // 如果没有获取到日期，显示提示
-                const option = document.createElement('option');
-                option.value = "";
-                option.textContent = "无可用到期日";
-                strategyExpiry.appendChild(option);
-                return;
-            }
-            
-            dates.forEach(date => {
-                const option = document.createElement('option');
-                option.value = date;
-                
-                // 计算距离当前日期的天数
-                const today = new Date();
-                const expiryDate = new Date(date);
-                const daysToExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-                
-                // 格式化日期显示，加上天数
-                option.textContent = `${date} (${daysToExpiry}天)`;
-                
-                strategyExpiry.appendChild(option);
-            });
-            
-            // 选择默认到期日 - 优先选择30-60天左右的日期
-            let selectedIndex = 0;
-            const today = new Date();
-            
-            // 查找30-60天范围内的第一个日期
-            for (let i = 0; i < dates.length; i++) {
-                const daysToExpiry = Math.ceil((new Date(dates[i]) - today) / (1000 * 60 * 60 * 24));
-                if (daysToExpiry >= 30 && daysToExpiry <= 60) {
-                    selectedIndex = i;
-                    break;
-                }
-                // 如果找不到理想范围，选择第一个大于20天的日期
-                if (selectedIndex === 0 && daysToExpiry >= 20) {
-                    selectedIndex = i;
-                }
-            }
-            
-            strategyExpiry.selectedIndex = selectedIndex;
-            
-        } catch (error) {
-            console.error('Error loading strategy expiry dates:', error);
-            strategyExpiry.innerHTML = '<option value="">获取到期日失败</option>';
-        }
-    }
-    
-    // 根据策略类型更新执行价输入
-    function updateStrategyInputs() {
-        const strategy = strategyType.value;
-        strikeInputs.innerHTML = '';
-        
-        let strikesNeeded = 0;
-        let strikeLebels = [];
-        
-        if (strategy === 'bullCallSpread' || strategy === 'bearPutSpread') {
-            strikesNeeded = 2;
-            strikeLabels = ['低执行价', '高执行价'];
-        } else if (strategy === 'ironCondor') {
-            strikesNeeded = 4;
-            strikeLabels = ['看跌低执行价', '看跌高执行价', '看涨低执行价', '看涨高执行价'];
-        } else if (strategy === 'callButterfly' || strategy === 'putButterfly') {
-            strikesNeeded = 3;
-            strikeLabels = ['低执行价', '中间执行价', '高执行价'];
-        } else if (strategy === 'straddle') {
-            strikesNeeded = 1;
-            strikeLabels = ['执行价'];
-        }
-        
-        // 创建执行价输入框
-        for (let i = 0; i < strikesNeeded; i++) {
-            const formGroup = document.createElement('div');
-            formGroup.className = 'form-group mb-2';
-            
-            const label = document.createElement('label');
-            label.textContent = `${strikeLabels[i] || `执行价 ${i+1}`}:`;
-            
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.className = 'form-control strike-input';
-            input.placeholder = '输入执行价';
-            input.step = '0.5';
-            
-            // 尝试设置一个合理的默认值
-            const getStockPrice = async () => {
-                try {
-                    const data = await apiService.getStockPrice(strategyStockSelect.value);
-                    const basePrice = data.price;
-                    
-                    // 根据策略类型设置默认值
-                    if (strategy === 'straddle') {
-                        input.value = basePrice.toFixed(1);
-                    } else if (strategy === 'bullCallSpread') {
-                        input.value = (basePrice * (0.95 + i * 0.1)).toFixed(1);
-                    } else if (strategy === 'bearPutSpread') {
-                        input.value = (basePrice * (1.05 - i * 0.1)).toFixed(1);
-                    } else if (strategy === 'ironCondor') {
-                        const factors = [0.85, 0.95, 1.05, 1.15];
-                        input.value = (basePrice * factors[i]).toFixed(1);
-                    } else if (strategy === 'callButterfly' || strategy === 'putButterfly') {
-                        const factors = [0.9, 1.0, 1.1];
-                        input.value = (basePrice * factors[i]).toFixed(1);
-                    }
-                } catch (e) {
-                    console.error('Error setting default strike prices:', e);
-                    input.value = '100';
-                }
-            };
-            
-            getStockPrice();
-            
-            formGroup.appendChild(label);
-            formGroup.appendChild(input);
-            strikeInputs.appendChild(formGroup);
-        }
-    }
-    
-    // 计算并显示策略
-    async function calculateAndDisplayStrategy() {
-        try {
-            // 获取基本参数
-            const symbol = strategyStockSelect.value;
-            const expiryDate = strategyExpiry.value;
-            const ivValue = parseFloat(strategyIV.value) / 100; // 转换为小数
-            const strategyName = strategyType.value;
-            
-            // 获取当前股价
-            const stockData = await apiService.getStockPrice(symbol);
-            const stockPrice = stockData.price;
-            
-            // 显示数据源指示器
-            if (stockData.isMockData || stockData.timestamp) {
-                showDataSourceIndicator('策略分析', true);
-            } else {
-                showDataSourceIndicator('策略分析', false);
-            }
-            
-            // 获取执行价
-            const strikeInputElements = document.querySelectorAll('.strike-input');
-            const strikes = Array.from(strikeInputElements).map(input => parseFloat(input.value));
-            
-            // 计算到期天数
-            const today = new Date();
-            const expiry = new Date(expiryDate);
-            const daysToExpiry = Math.max(1, Math.ceil((expiry - today) / (1000 * 60 * 60 * 24)));
-            
-            // 根据策略类型计算
-            let result;
-            if (strategyName === 'bullCallSpread' || strategyName === 'bearCallSpread' || 
-                strategyName === 'bullPutSpread' || strategyName === 'bearPutSpread') {
-                result = optionStrategies.calculateVerticalSpread(
-                    strategyName, stockPrice, strikes, daysToExpiry, ivValue
-                );
-            } else if (strategyName === 'ironCondor') {
-                result = optionStrategies.calculateIronCondor(
-                    stockPrice, strikes, daysToExpiry, ivValue
-                );
-            } else if (strategyName === 'callButterfly' || strategyName === 'putButterfly') {
-                result = optionStrategies.calculateButterfly(
-                    strategyName, stockPrice, strikes, daysToExpiry, ivValue
-                );
-            } else if (strategyName === 'straddle') {
-                result = optionStrategies.calculateStraddle(
-                    stockPrice, strikes[0], daysToExpiry, ivValue
-                );
-            }
-            
-            // 显示策略结果
-            displayStrategyResult(result, stockPrice);
-            
-        } catch (error) {
-            console.error('Error calculating strategy:', error);
-            showDataSourceIndicator('策略分析', true);
-        }
-    }
-    
-    // 显示策略计算结果
-    function displayStrategyResult(result, stockPrice) {
-        // 显示策略详情
-        strategyNameDisplay.textContent = result.strategyName || '-';
-        
-        // 格式化成本和收益数据
-        const formatValue = (value) => {
-            if (value === 'unlimited') return '无限';
-            return '$' + value.toFixed(2);
-        };
-        
-        strategyCost.textContent = formatValue(result.cost);
-        
-        if (result.maxProfit === 'unlimited') {
-            strategyMaxProfit.textContent = '无限';
-        } else {
-            const maxProfitReturn = result.maxProfit !== 0 && result.cost !== 0 ? 
-                ((result.maxProfit / Math.abs(result.cost)) * 100).toFixed(2) + '%' : 'N/A';
-            strategyMaxProfit.textContent = `${formatValue(result.maxProfit)} (${maxProfitReturn})`;
-        }
-        
-        if (result.maxLoss === 'unlimited') {
-            strategyMaxLoss.textContent = '无限';
-        } else {
-            const maxLossReturn = result.maxLoss !== 0 && result.cost !== 0 ? 
-                ((result.maxLoss / Math.abs(result.cost)) * 100).toFixed(2) + '%' : 'N/A';
-            strategyMaxLoss.textContent = `${formatValue(result.maxLoss)} (${maxLossReturn})`;
-        }
-        
-        // 格式化盈亏平衡点
-        if (Array.isArray(result.breakEven)) {
-            strategyBreakEven.textContent = result.breakEven.map(b => '$' + b.toFixed(2)).join(' 和 ');
-        } else if (result.breakEven === null) {
-            strategyBreakEven.textContent = 'N/A';
-        } else {
-            strategyBreakEven.textContent = '$' + result.breakEven.toFixed(2);
-        }
-        
-        // 显示策略组成部分
-        legsListDisplay.innerHTML = '';
-        if (result.legs && result.legs.length) {
-            result.legs.forEach(leg => {
-                const legElement = document.createElement('li');
-                legElement.className = 'list-group-item d-flex justify-content-between align-items-center';
-                
-                const actionText = leg.action === 'buy' ? '买入' : '卖出';
-                const typeText = leg.type === 'call' ? '看涨' : '看跌';
-                const quantity = leg.quantity || 1;
-                
-                legElement.innerHTML = `
-                    <span><strong>${actionText}</strong> ${quantity}张 ${typeText}期权 @ $${leg.strike.toFixed(2)}</span>
-                    <span class="badge rounded-pill ${leg.action === 'buy' ? 'bg-danger' : 'bg-success'}">
-                        ${leg.action === 'buy' ? '-' : '+'}$${(leg.price * 100 * quantity).toFixed(2)}
-                    </span>
-                `;
-                
-                legsListDisplay.appendChild(legElement);
-            });
         }
     }
     
@@ -969,24 +646,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             console.warn('未找到期权容器 (.options-container)');
         }
-        
-        // 创建策略分析数据源指示器
-        const strategyDataSourceIndicator = document.createElement('div');
-        strategyDataSourceIndicator.id = 'strategyDataSourceIndicator';
-        strategyDataSourceIndicator.className = 'data-source-indicator mb-2';
-        
-        const strategyContainer = document.querySelector('.strategy-container');
-        if (strategyContainer) {
-            strategyContainer.prepend(strategyDataSourceIndicator);
-        } else {
-            console.warn('未找到策略容器 (.strategy-container)');
-        }
     }
     
     // 更新数据源指示器
     function updateDataSourceIndicator(isRealData) {
         const indicator = document.getElementById('dataSourceIndicator');
-        const strategyIndicator = document.getElementById('strategyDataSourceIndicator');
         
         const currentSource = 'Tradier';
         
@@ -1002,21 +666,6 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 indicator.style.transition = 'opacity 1s';
                 indicator.style.opacity = '0';
-            }, 5000);
-        }
-        
-        if (strategyIndicator) {
-            strategyIndicator.innerHTML = `
-                <div class="alert alert-${isRealData ? 'info' : 'warning'} py-1 small">
-                    <i class="bi ${isRealData ? 'bi-cloud-download' : 'bi-exclamation-triangle'}"></i>
-                    ${isRealData ? `使用${currentSource}市场数据` : '数据获取失败，请检查API密钥或网络连接'}
-                </div>
-            `;
-            
-            // 5秒后淡出
-            setTimeout(() => {
-                strategyIndicator.style.transition = 'opacity 1s';
-                strategyIndicator.style.opacity = '0';
             }, 5000);
         }
     }
