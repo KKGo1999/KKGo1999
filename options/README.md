@@ -13,7 +13,6 @@
 - **数据源支持**：
   - Tradier API (提供实时股票和期权数据)
   - 内置模拟数据 (无API密钥时的备选方案)
-- **可视化**：使用Chart.js显示直观的价格分布、波动率微笑和收益曲线图表
 
 ## 设置指南
 
@@ -80,6 +79,7 @@
 
 - **前端框架**：HTML5, CSS3, JavaScript (ES6+)
 - **UI组件**：Bootstrap 5
-- **图表可视化**：Chart.js
 - **数学模型**：Black-Scholes期权定价模型
 - **API集成**：Tradier API
+
+## 免责声明

@@ -4,12 +4,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const optionsCalculator = new OptionsCalculator();
     const optionStrategies = new OptionStrategies(optionsCalculator);
     
-    // 图表实例
-    let priceChart = null;
-    let ivChart = null;
-    let greeksChart = null;
-    let payoffChart = null;
-    
     // DOM元素 - 期权链分析
     const stockSelect = document.getElementById('stockSelect');
     const expirySelect = document.getElementById('expirySelect');
@@ -112,18 +106,31 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // 默认加载第一个股票
             const defaultSymbol = stockSelect.value;
-            await loadStockData(defaultSymbol);
-            
-            // 初始化策略相关内容
-            await loadStrategyStockData(strategyStockSelect.value);
-            await loadStrategyExpiryDates(strategyStockSelect.value);
-            updateStrategyInputs();
+            if (defaultSymbol && defaultSymbol.trim() !== '') {
+                await loadStockData(defaultSymbol);
+                
+                // 初始化策略相关内容
+                await loadStrategyStockData(strategyStockSelect.value);
+                await loadStrategyExpiryDates(strategyStockSelect.value);
+                updateStrategyInputs();
+            } else {
+                showMessage('请选择一个有效的股票代码', true);
+                expirySelect.innerHTML = '<option value="">请选择一个股票</option>';
+                optionsData.innerHTML = '<tr><td colspan="16" class="text-center">请先选择一个股票</td></tr>';
+            }
             
             // 添加事件监听器
             stockSelect.addEventListener('change', async () => {
                 const symbol = stockSelect.value;
-                await loadStockData(symbol);
-                loadOptionsChain();
+                if (symbol && symbol.trim() !== '') {
+                    await loadStockData(symbol);
+                    loadOptionsChain();
+                } else {
+                    console.error('Selected symbol is empty or invalid');
+                    showMessage('请选择一个有效的股票代码', true);
+                    expirySelect.innerHTML = '<option value="">请选择一个股票</option>';
+                    optionsData.innerHTML = '<tr><td colspan="16" class="text-center">请先选择一个股票</td></tr>';
+                }
             });
             
             expirySelect.addEventListener('change', loadOptionsChain);
@@ -132,9 +139,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             strategyStockSelect.addEventListener('change', async () => {
                 const symbol = strategyStockSelect.value;
-                await loadStrategyStockData(symbol);
-                await loadStrategyExpiryDates(symbol);
-                updateStrategyInputs();
+                if (symbol && symbol.trim() !== '') {
+                    await loadStrategyStockData(symbol);
+                    await loadStrategyExpiryDates(symbol);
+                    updateStrategyInputs();
+                } else {
+                    console.error('Selected strategy symbol is empty or invalid');
+                    showMessage('请选择一个有效的股票代码进行策略分析', true);
+                }
             });
             
             strategyExpiry.addEventListener('change', updateStrategyInputs);
@@ -560,186 +572,63 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 显示策略计算结果
     function displayStrategyResult(result, stockPrice) {
-        if (!result) return;
+        // 显示策略详情
+        strategyNameDisplay.textContent = result.strategyName || '-';
         
-        // 转换策略名称为可读形式
-        const strategyNames = {
-            'bullCallSpread': '牛市看涨价差 (Bull Call Spread)',
-            'bearCallSpread': '熊市看涨价差 (Bear Call Spread)',
-            'bullPutSpread': '牛市看跌价差 (Bull Put Spread)',
-            'bearPutSpread': '熊市看跌价差 (Bear Put Spread)',
-            'ironCondor': '铁秃鹰 (Iron Condor)',
-            'callButterfly': '看涨蝶式策略 (Call Butterfly)',
-            'putButterfly': '看跌蝶式策略 (Put Butterfly)',
-            'straddle': '跨式策略 (Straddle)'
+        // 格式化成本和收益数据
+        const formatValue = (value) => {
+            if (value === 'unlimited') return '无限';
+            return '$' + value.toFixed(2);
         };
         
-        // 更新基本信息
-        strategyNameDisplay.textContent = strategyNames[result.strategy] || result.strategy;
+        strategyCost.textContent = formatValue(result.cost);
         
-        // 成本/收益
-        const costValue = Math.abs(result.netCost || result.netCredit || 0);
-        const isCost = result.netCost > 0 || !result.netCredit;
-        strategyCost.textContent = `${isCost ? '-' : '+'} $${costValue.toFixed(2)}`;
-        strategyCost.className = isCost ? 'text-danger' : 'text-success';
-        
-        // 最大盈利/亏损
-        strategyMaxProfit.textContent = typeof result.maxProfit === 'number' ? 
-            `$${result.maxProfit.toFixed(2)}` : result.maxProfit;
-        strategyMaxLoss.textContent = typeof result.maxLoss === 'number' ? 
-            `$${result.maxLoss.toFixed(2)}` : result.maxLoss;
-        
-        // 盈亏平衡点
-        if (result.breakEven) {
-            strategyBreakEven.textContent = `$${result.breakEven.toFixed(2)}`;
-        } else if (result.breakEvenLow && result.breakEvenHigh) {
-            strategyBreakEven.textContent = `$${result.breakEvenLow.toFixed(2)} 和 $${result.breakEvenHigh.toFixed(2)}`;
+        if (result.maxProfit === 'unlimited') {
+            strategyMaxProfit.textContent = '无限';
         } else {
-            strategyBreakEven.textContent = '-';
+            const maxProfitReturn = result.maxProfit !== 0 && result.cost !== 0 ? 
+                ((result.maxProfit / Math.abs(result.cost)) * 100).toFixed(2) + '%' : 'N/A';
+            strategyMaxProfit.textContent = `${formatValue(result.maxProfit)} (${maxProfitReturn})`;
         }
         
-        // 清空并显示组合部分
-        legsListDisplay.innerHTML = '';
+        if (result.maxLoss === 'unlimited') {
+            strategyMaxLoss.textContent = '无限';
+        } else {
+            const maxLossReturn = result.maxLoss !== 0 && result.cost !== 0 ? 
+                ((result.maxLoss / Math.abs(result.cost)) * 100).toFixed(2) + '%' : 'N/A';
+            strategyMaxLoss.textContent = `${formatValue(result.maxLoss)} (${maxLossReturn})`;
+        }
         
-        // 垂直价差显示
-        if (result.longOption && result.shortOption) {
-            const longLeg = document.createElement('li');
-            longLeg.className = 'list-group-item';
-            longLeg.textContent = `买入 ${result.longOption.type === 'call' ? '看涨' : '看跌'} 执行价: $${result.longOption.strike.toFixed(2)} 价格: $${result.longOption.price.toFixed(2)}`;
-            legsListDisplay.appendChild(longLeg);
-            
-            const shortLeg = document.createElement('li');
-            shortLeg.className = 'list-group-item';
-            shortLeg.textContent = `卖出 ${result.shortOption.type === 'call' ? '看涨' : '看跌'} 执行价: $${result.shortOption.strike.toFixed(2)} 价格: $${result.shortOption.price.toFixed(2)}`;
-            legsListDisplay.appendChild(shortLeg);
-        } 
-        // legs数组显示(铁鹰、蝶式、跨式)
-        else if (result.legs && Array.isArray(result.legs)) {
+        // 格式化盈亏平衡点
+        if (Array.isArray(result.breakEven)) {
+            strategyBreakEven.textContent = result.breakEven.map(b => '$' + b.toFixed(2)).join(' 和 ');
+        } else if (result.breakEven === null) {
+            strategyBreakEven.textContent = 'N/A';
+        } else {
+            strategyBreakEven.textContent = '$' + result.breakEven.toFixed(2);
+        }
+        
+        // 显示策略组成部分
+        legsListDisplay.innerHTML = '';
+        if (result.legs && result.legs.length) {
             result.legs.forEach(leg => {
                 const legElement = document.createElement('li');
-                legElement.className = 'list-group-item';
-                const quantity = leg.quantity ? leg.quantity : 1;
-                const position = leg.position === 'long' ? '买入' : '卖出';
-                const type = leg.type === 'call' ? '看涨' : '看跌';
-                legElement.textContent = `${position} ${quantity}张 ${type} 执行价: $${leg.strike.toFixed(2)} 价格: $${leg.price.toFixed(2)}`;
+                legElement.className = 'list-group-item d-flex justify-content-between align-items-center';
+                
+                const actionText = leg.action === 'buy' ? '买入' : '卖出';
+                const typeText = leg.type === 'call' ? '看涨' : '看跌';
+                const quantity = leg.quantity || 1;
+                
+                legElement.innerHTML = `
+                    <span><strong>${actionText}</strong> ${quantity}张 ${typeText}期权 @ $${leg.strike.toFixed(2)}</span>
+                    <span class="badge rounded-pill ${leg.action === 'buy' ? 'bg-danger' : 'bg-success'}">
+                        ${leg.action === 'buy' ? '-' : '+'}$${(leg.price * 100 * quantity).toFixed(2)}
+                    </span>
+                `;
+                
                 legsListDisplay.appendChild(legElement);
             });
         }
-        
-        // 更新收益曲线图表
-        updatePayoffChart(result.payoffCurve, stockPrice, result.strategy);
-    }
-    
-    // 更新收益曲线图表
-    function updatePayoffChart(payoffData, stockPrice, strategyName) {
-        if (!payoffData || !payoffData.length) return;
-        
-        const ctx = document.getElementById('payoffChart').getContext('2d');
-        
-        // 准备数据
-        const labels = payoffData.map(item => item.stockPrice.toFixed(0));
-        const data = payoffData.map(item => item.payoff);
-        
-        // 当前股价位置的索引
-        const currentIndex = payoffData.findIndex(item => item.stockPrice >= stockPrice);
-        
-        // 设置图表颜色
-        const getStrategyColor = (strategy) => {
-            const colors = {
-                'bullCallSpread': 'rgba(75, 192, 192, 1)', // 青绿色
-                'bearPutSpread': 'rgba(255, 99, 132, 1)',  // 红色
-                'ironCondor': 'rgba(153, 102, 255, 1)',    // 紫色
-                'callButterfly': 'rgba(255, 159, 64, 1)',  // 橙色
-                'putButterfly': 'rgba(54, 162, 235, 1)',   // 蓝色
-                'straddle': 'rgba(255, 206, 86, 1)'        // 黄色
-            };
-            return colors[strategy] || 'rgba(75, 192, 192, 1)';
-        };
-        
-        const borderColor = getStrategyColor(strategyName);
-        const backgroundColor = borderColor.replace('1)', '0.2)');
-        
-        // 销毁旧图表
-        if (payoffChart) {
-            payoffChart.destroy();
-        }
-        
-        // 创建图表
-        payoffChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '策略收益 ($)',
-                    data: data,
-                    borderColor: borderColor,
-                    backgroundColor: backgroundColor,
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: '策略收益曲线'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `股价: $${context.label}, 收益: $${context.raw.toFixed(2)}`;
-                            }
-                        }
-                    },
-                    annotation: {
-                        annotations: {
-                            line1: {
-                                type: 'line',
-                                yMin: 0,
-                                yMax: 0,
-                                borderColor: 'rgba(0, 0, 0, 0.5)',
-                                borderWidth: 1,
-                                borderDash: [5, 5]
-                            },
-                            line2: currentIndex >= 0 ? {
-                                type: 'line',
-                                xMin: currentIndex,
-                                xMax: currentIndex,
-                                borderColor: 'rgba(255, 0, 0, 0.5)',
-                                borderWidth: 1
-                            } : undefined
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: '股票价格 ($)'
-                        },
-                        grid: {
-                            display: false
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: '盈亏 ($)'
-                        },
-                        grid: {
-                            color: function(context) {
-                                if (context.tick.value === 0) {
-                                    return 'rgba(0, 0, 0, 0.5)';
-                                }
-                                return 'rgba(0, 0, 0, 0.1)';
-                            }
-                        }
-                    }
-                }
-            }
-        });
     }
     
     // 加载期权链
@@ -903,7 +792,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isFiltered) {
                     const numericStrikePercentage = parseFloat(strikePercentage);
                     // 只显示价内 (strikePercentage < 0) 且有正回报率 (numericSellerReturn > 0) 的期权
-                    if (!(numericStrikePercentage < -10 && numericSellerReturn > 5)) {
+                    if (!(numericStrikePercentage < -25 && numericSellerReturn > 5)) {
                         return; // 跳过这个期权
                     }
                 }
@@ -1053,286 +942,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            const symbol = stockSelect.value;
-            const expiryDate = expirySelect.value;
-            const optionType = callOption.checked ? 'call' : 'put';
-            
-            // 获取基本数据
-            const stockData = await apiService.getStockPrice(symbol);
-            const stockPrice = stockData.price;
-            const strikePrice = option.strike || 0;
-            
-            // 计算到期时间(年)
-            const today = new Date();
-            const expiry = new Date(expiryDate);
-            const timeToExpiryDays = Math.max(0, Math.ceil((expiry - today) / (1000 * 60 * 60 * 24)));
-            const timeToExpiryYears = timeToExpiryDays / 365;
-            
-            // 波动率
-            const impliedVol = parseFloat(option.impliedVolatility || 0);
-            
-            // 更新图表
-            updatePriceChart(optionType, stockPrice, strikePrice, timeToExpiryYears, impliedVol);
-            updateIVChart(optionsData);
-            updateGreeksChart(optionType, stockPrice, strikePrice, timeToExpiryYears, impliedVol);
+            console.log('选中期权分析:', {
+                股票: option.stockSymbol,
+                到期日: option.expiryDate,
+                类型: option.optionType === 'call' ? '看涨' : '看跌',
+                执行价: option.strike,
+                当前价格: option.lastPrice,
+                隐含波动率: (option.impliedVolatility * 100).toFixed(2) + '%'
+            });
             
         } catch (error) {
             console.error('Error analyzing option:', error);
         }
-    }
-    
-    // 更新价格分布图表
-    function updatePriceChart(optionType, stockPrice, strikePrice, timeToExpiryYears, impliedVol) {
-        const priceImpact = optionsCalculator.calculatePriceImpact(
-            optionType,
-            stockPrice,
-            strikePrice,
-            timeToExpiryYears,
-            impliedVol
-        );
-        
-        const labels = priceImpact.map(item => item.stockPrice.toFixed(0));
-        const data = priceImpact.map(item => item.optionPrice);
-        
-        const ctx = document.getElementById('priceChart').getContext('2d');
-        
-        if (priceChart) {
-            priceChart.destroy();
-        }
-        
-        priceChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: optionType === 'call' ? '看涨期权价格' : '看跌期权价格',
-                    data: data,
-                    borderColor: optionType === 'call' ? 'rgba(75, 192, 192, 1)' : 'rgba(255, 99, 132, 1)',
-                    backgroundColor: optionType === 'call' ? 'rgba(75, 192, 192, 0.2)' : 'rgba(255, 99, 132, 0.2)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.3
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: `期权价格与股票价格关系 (执行价: $${strikePrice})`
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `股票价格: $${context.label}, 期权价格: $${context.raw.toFixed(2)}`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: '股票价格 ($)'
-                        },
-                        grid: {
-                            display: false
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: '期权价格 ($)'
-                        },
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
-    }
-    
-    // 更新隐含波动率图表
-    function updateIVChart(optionsData) {
-        // 从期权链表提取数据
-        const rows = Array.from(optionsData.querySelectorAll('tr'));
-        const strikes = [];
-        const ivs = [];
-        
-        rows.forEach(row => {
-            const cells = row.querySelectorAll('td');
-            if (cells.length >= 7) {
-                strikes.push(parseFloat(cells[0].textContent));
-                
-                // 正确处理IV值，去除百分比符号
-                const ivText = cells[6].textContent;
-                const ivValue = parseFloat(ivText.replace('%', '')) / 100;
-                ivs.push(ivValue);
-            }
-        });
-        
-        // 排序数据以确保图表正确
-        const dataPoints = strikes.map((strike, index) => ({strike, iv: ivs[index]}));
-        dataPoints.sort((a, b) => a.strike - b.strike);
-        
-        const sortedStrikes = dataPoints.map(point => point.strike);
-        const sortedIVs = dataPoints.map(point => point.iv);
-        
-        // 创建图表
-        const ctx = document.getElementById('ivChart').getContext('2d');
-        
-        if (ivChart) {
-            ivChart.destroy();
-        }
-        
-        ivChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: sortedStrikes,
-                datasets: [{
-                    label: '隐含波动率',
-                    data: sortedIVs,
-                    borderColor: 'rgba(153, 102, 255, 1)',
-                    backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.3
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: '波动率微笑'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `执行价: $${context.label}, IV: ${(context.raw * 100).toFixed(1)}%`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: '执行价 ($)'
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: '隐含波动率'
-                        },
-                        ticks: {
-                            callback: function(value) {
-                                return (value * 100).toFixed(0) + '%';
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-    
-    // 更新希腊字母图表
-    function updateGreeksChart(optionType, stockPrice, strikePrice, timeToExpiryYears, impliedVol) {
-        // 计算不同股价对希腊字母的影响
-        const priceRange = 0.2;
-        const priceLow = stockPrice * (1 - priceRange);
-        const priceHigh = stockPrice * (1 + priceRange);
-        const steps = 40;
-        const priceStep = (priceHigh - priceLow) / steps;
-        
-        const prices = [];
-        const deltas = [];
-        const gammas = [];
-        const thetas = [];
-        const vegas = [];
-        
-        for (let price = priceLow; price <= priceHigh; price += priceStep) {
-            const greeks = optionsCalculator.calculateGreeks(
-                optionType, price, strikePrice, timeToExpiryYears, impliedVol
-            );
-            
-            prices.push(price.toFixed(0));
-            deltas.push(greeks.delta);
-            gammas.push(greeks.gamma * 100); // 放大gamma以便于可视化
-            thetas.push(greeks.theta / 10);  // 缩小theta以便于可视化
-            vegas.push(greeks.vega);
-        }
-        
-        // 创建图表
-        const ctx = document.getElementById('greeksChart').getContext('2d');
-        
-        if (greeksChart) {
-            greeksChart.destroy();
-        }
-        
-        greeksChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: prices,
-                datasets: [
-                    {
-                        label: '德尔塔',
-                        data: deltas,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 2,
-                        fill: false,
-                        tension: 0.1
-                    },
-                    {
-                        label: '伽马 (x100)',
-                        data: gammas,
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        borderWidth: 2,
-                        fill: false,
-                        tension: 0.1
-                    },
-                    {
-                        label: '西塔 (/10)',
-                        data: thetas,
-                        borderColor: 'rgba(255, 205, 86, 1)',
-                        borderWidth: 2,
-                        fill: false,
-                        tension: 0.1
-                    },
-                    {
-                        label: '维加',
-                        data: vegas,
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 2,
-                        fill: false,
-                        tension: 0.1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: '希腊字母与股票价格关系'
-                    }
-                },
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: '股票价格 ($)'
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: '希腊字母值'
-                        }
-                    }
-                }
-            }
-        });
     }
     
     // 数据源指示器
@@ -1407,7 +1028,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const newKey = prompt(
             `请输入Tradier API密钥:`, 
-            currentKey || 'cju2rn9r01qr958213c0cju2rn9r01qr958213cg'
+            currentKey || ''
         );
         
         if (newKey !== null) {

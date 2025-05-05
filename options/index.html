@@ -120,6 +120,8 @@
                                                 <th>Gamma</th>
                                                 <th>Theta</th>
                                                 <th>Vega</th>
+                                                <th>到期日</th>
+                                                <th>股票</th>
                                             </tr>
                                         </thead>
                                         <tbody id="optionsData">
@@ -170,40 +172,6 @@
                                             </tr>
                                         </tbody>
                                     </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row mt-4">
-                    <div class="col-md-12">
-                        <div class="card">
-                            <div class="card-header">
-                                期权分析图表
-                            </div>
-                            <div class="card-body">
-                                <ul class="nav nav-tabs" id="myTab" role="tablist">
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link active" id="price-tab" data-bs-toggle="tab" data-bs-target="#price" type="button" role="tab">价格分布</button>
-                                    </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" id="iv-tab" data-bs-toggle="tab" data-bs-target="#iv" type="button" role="tab">隐含波动率</button>
-                                    </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" id="greeks-tab" data-bs-toggle="tab" data-bs-target="#greeks" type="button" role="tab">希腊字母</button>
-                                    </li>
-                                </ul>
-                                <div class="tab-content p-3" id="myTabContent">
-                                    <div class="tab-pane fade show active" id="price" role="tabpanel">
-                                        <canvas id="priceChart" height="300"></canvas>
-                                    </div>
-                                    <div class="tab-pane fade" id="iv" role="tabpanel">
-                                        <canvas id="ivChart" height="300"></canvas>
-                                    </div>
-                                    <div class="tab-pane fade" id="greeks" role="tabpanel">
-                                        <canvas id="greeksChart" height="300"></canvas>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -306,16 +274,6 @@
                                         <!-- 策略组成部分会动态生成 -->
                                     </ul>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header">
-                                收益曲线
-                            </div>
-                            <div class="card-body">
-                                <canvas id="payoffChart" height="300"></canvas>
                             </div>
                         </div>
                     </div>
