@@ -42,6 +42,24 @@
     --sort-icon-color: #adb5bd;
 }
 
+/* 自定义容器宽度，设置为98% */
+.container, .container-fluid {
+    width: 98% !important;
+    max-width: 98% !important;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1% !important;
+    padding-right: 1% !important;
+}
+
+/* 确保在不同屏幕尺寸下容器宽度一致 */
+@media (min-width: 576px), (min-width: 768px), (min-width: 992px), (min-width: 1200px), (min-width: 1400px) {
+    .container {
+        width: 98% !important;
+        max-width: 98% !important;
+    }
+}
+
 /* Basic theme styles */
 body {
     background-color: var(--bg-color);
