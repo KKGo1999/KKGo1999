@@ -31,9 +31,9 @@
     --table-border: #495057;
     --table-hover: rgba(33, 136, 255, 0.2);
     --table-selected: rgba(33, 136, 255, 0.3);
-    --table-primary-bg: #0d6efd;
-    --table-success-bg: #198754;
-    --table-light-bg: #343a40;
+    --table-primary-bg: #1c4b91;
+    --table-success-bg: #155724;
+    --table-light-bg: #495057;
     --positive-color: #42d86c;
     --negative-color: #ff5c6c;
     --border-color: rgba(255,255,255,0.1);
@@ -90,6 +90,7 @@ body {
 .table {
     color: var(--text-color);
     border-color: var(--table-border);
+    background-color: var(--card-bg);
 }
 
 .table th {
@@ -256,6 +257,60 @@ body {
     --bs-table-hover-color: var(--text-color);
 }
 
+/* Dark mode specific table row states to ensure text is readable */
+[data-theme="dark"] .table-primary,
+[data-theme="dark"] .table-success,
+[data-theme="dark"] .table-light {
+    color: var(--text-color) !important;
+}
+
+/* Ensure all table cells inherit correct color in dark mode */
+[data-theme="dark"] .table-primary td,
+[data-theme="dark"] .table-success td,
+[data-theme="dark"] .table-light td {
+    color: var(--text-color) !important;
+}
+
+/* Override Bootstrap's table utility classes completely in dark mode */
+[data-theme="dark"] .table .table-primary,
+[data-theme="dark"] .table > tbody > .table-primary,
+[data-theme="dark"] .table > tbody > .table-primary > td,
+[data-theme="dark"] .table > tbody > .table-primary > th {
+    --bs-table-bg: var(--table-primary-bg) !important;
+    --bs-table-color: var(--text-color) !important;
+    background-color: var(--table-primary-bg) !important;
+    color: var(--text-color) !important;
+}
+
+[data-theme="dark"] .table .table-success,
+[data-theme="dark"] .table > tbody > .table-success,
+[data-theme="dark"] .table > tbody > .table-success > td,
+[data-theme="dark"] .table > tbody > .table-success > th {
+    --bs-table-bg: var(--table-success-bg) !important;
+    --bs-table-color: var(--text-color) !important;
+    background-color: var(--table-success-bg) !important;
+    color: var(--text-color) !important;
+}
+
+[data-theme="dark"] .table .table-light,
+[data-theme="dark"] .table > tbody > .table-light,
+[data-theme="dark"] .table > tbody > .table-light > td,
+[data-theme="dark"] .table > tbody > .table-light > th {
+    --bs-table-bg: var(--table-light-bg) !important;
+    --bs-table-color: var(--text-color) !important;
+    background-color: var(--table-light-bg) !important;
+    color: var(--text-color) !important;
+}
+
+/* Also override hover states for these rows in dark mode */
+[data-theme="dark"] .table-hover > tbody > .table-primary:hover,
+[data-theme="dark"] .table-hover > tbody > .table-success:hover,
+[data-theme="dark"] .table-hover > tbody > .table-light:hover {
+    --bs-table-bg: var(--table-hover) !important;
+    background-color: var(--table-hover) !important;
+    color: var(--text-color) !important;
+}
+
 /* 表格滚动区域 */
 .table-responsive {
     max-height: 600px;
@@ -405,4 +460,34 @@ input:checked + .slider:before {
 .sortable-table th.active-sort {
     background-color: var(--table-hover);
     font-weight: bold;
+}
+
+/* Force dark mode table colors with maximum specificity */
+html[data-theme="dark"] body .table tbody tr.table-primary,
+html[data-theme="dark"] body .table tbody tr.table-primary td,
+html[data-theme="dark"] body .table tbody tr.table-primary th {
+    background-color: #1c4b91 !important;
+    color: #f8f9fa !important;
+}
+
+html[data-theme="dark"] body .table tbody tr.table-success,
+html[data-theme="dark"] body .table tbody tr.table-success td,
+html[data-theme="dark"] body .table tbody tr.table-success th {
+    background-color: #155724 !important;
+    color: #f8f9fa !important;
+}
+
+html[data-theme="dark"] body .table tbody tr.table-light,
+html[data-theme="dark"] body .table tbody tr.table-light td,
+html[data-theme="dark"] body .table tbody tr.table-light th {
+    background-color: #495057 !important;
+    color: #f8f9fa !important;
+}
+
+/* Ensure hover states work in dark mode */
+html[data-theme="dark"] body .table tbody tr.table-primary:hover,
+html[data-theme="dark"] body .table tbody tr.table-success:hover,
+html[data-theme="dark"] body .table tbody tr.table-light:hover {
+    background-color: rgba(33, 136, 255, 0.2) !important;
+    color: #f8f9fa !important;
 }
