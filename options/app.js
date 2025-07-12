@@ -15,7 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectAllOptions = document.getElementById('selectAllOptions');
     const candidatesList = document.getElementById('candidatesList');
     const clearCandidates = document.getElementById('clearCandidates');
-    const filterOptionsTable = document.getElementById('filterOptionsTable');
+    const filterByStrikePercentage = document.getElementById('filterByStrikePercentage');
+    const filterBySellerReturn = document.getElementById('filterBySellerReturn');
     const tradierKeyButton = document.getElementById('tradierKeyButton');
     
     // 候选列表数据
@@ -137,21 +138,38 @@ document.addEventListener('DOMContentLoaded', () => {
             clearCandidates.addEventListener('click', clearCandidateList);
             
             // 添加期权链表格过滤器事件监听
-            if (filterOptionsTable) {
-                filterOptionsTable.addEventListener('change', function() {
+            if (filterByStrikePercentage) {
+                filterByStrikePercentage.addEventListener('input', function() {
                     // 保存过滤器状态到本地存储
-                    localStorage.setItem('filterOptionsTable', this.checked);
+                    localStorage.setItem('filterByStrikePercentage', this.value);
                     // 重新加载期权链以应用过滤器
                     loadOptionsChain();
                 });
                 
                 // 从本地存储中恢复过滤器状态
-                const savedFilterState = localStorage.getItem('filterOptionsTable');
-                if (savedFilterState === 'true') {
-                    filterOptionsTable.checked = true;
+                const savedStrikeFilterState = localStorage.getItem('filterByStrikePercentage');
+                if (savedStrikeFilterState !== null) {
+                    filterByStrikePercentage.value = savedStrikeFilterState;
                 }
             } else {
-                console.error('Filter checkbox not found');
+                console.error('Strike percentage filter input not found');
+            }
+            
+            if (filterBySellerReturn) {
+                filterBySellerReturn.addEventListener('input', function() {
+                    // 保存过滤器状态到本地存储
+                    localStorage.setItem('filterBySellerReturn', this.value);
+                    // 重新加载期权链以应用过滤器
+                    loadOptionsChain();
+                });
+                
+                // 从本地存储中恢复过滤器状态
+                const savedReturnFilterState = localStorage.getItem('filterBySellerReturn');
+                if (savedReturnFilterState !== null) {
+                    filterBySellerReturn.value = savedReturnFilterState;
+                }
+            } else {
+                console.error('Seller return filter input not found');
             }
             
             // 显示数据源指示器
@@ -314,7 +332,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const symbol = stockSelect.value;
             const expiryDate = expirySelect.value;
             const optionType = callOption.checked ? 'call' : 'put';
-            const isFiltered = filterOptionsTable && filterOptionsTable.checked;
+            const strikeFilterValue = filterByStrikePercentage ? parseFloat(filterByStrikePercentage.value) : null;
+            const isStrikeFiltered = strikeFilterValue !== null && !isNaN(strikeFilterValue);
+            const returnFilterValue = filterBySellerReturn ? parseFloat(filterBySellerReturn.value) : null;
+            const isReturnFiltered = returnFilterValue !== null && !isNaN(returnFilterValue);
             
             if (!expiryDate) return;
             
@@ -466,12 +487,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 option.numericSellerReturn = numericSellerReturn;
                 
                 // 应用过滤器 - 如果启用了过滤器且不满足条件，则跳过此期权
-                if (isFiltered) {
-                    const numericStrikePercentage = parseFloat(strikePercentage);
-                    // 只显示价内 (strikePercentage < 0) 且有正回报率 (numericSellerReturn > 0) 的期权
-                    if (!(numericStrikePercentage < -25 && numericSellerReturn > 5)) {
-                        return; // 跳过这个期权
-                    }
+                const numericStrikePercentage = parseFloat(strikePercentage);
+                let shouldSkip = false;
+                
+                // 检查执行价过滤器
+                if (isStrikeFiltered && numericStrikePercentage >= strikeFilterValue) {
+                    shouldSkip = true;
+                }
+                
+                // 检查回报率过滤器
+                if (isReturnFiltered && numericSellerReturn <= returnFilterValue) {
+                    shouldSkip = true;
+                }
+                
+                if (shouldSkip) {
+                    return; // 跳过这个期权
                 }
                 
                 // 累计显示的期权数量
@@ -569,10 +599,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             // 显示过滤器状态信息
-            if (isFiltered && displayedOptions < totalOptions) {
+            if ((isStrikeFiltered || isReturnFiltered) && displayedOptions < totalOptions) {
+                const activeFilters = [];
+                if (isStrikeFiltered) activeFilters.push(`相对差过滤 (<${strikeFilterValue}%)`);
+                if (isReturnFiltered) activeFilters.push(`回报率过滤 (>${returnFilterValue}%)`);
+                
                 const filterInfo = document.createElement('tr');
                 filterInfo.innerHTML = `<td colspan="14" class="text-center text-muted">
-                    <small>过滤器已启用: 显示 ${displayedOptions} 个期权 (共 ${totalOptions} 个期权)</small>
+                    <small>过滤器已启用 (${activeFilters.join(', ')}): 显示 ${displayedOptions} 个期权 (共 ${totalOptions} 个期权)</small>
                 </td>`;
                 optionsData.appendChild(filterInfo);
             }

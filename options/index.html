@@ -98,11 +98,25 @@
                                 期权链
                             </div>
                             <div class="card-body">
-                                <div class="filter-controls mb-2">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="filterOptionsTable">
-                                        <label class="form-check-label" for="filterOptionsTable">
-                                            仅显示价内且有较高回报的期权 (负价差 & 正回报率)
+                                <div class="filter-controls mb-2 d-flex align-items-center gap-4">
+                                    <div class="form-group d-flex align-items-center">
+                                        <label class="form-check-label me-2" for="filterByStrikePercentage">
+                                            相对差过滤 (<)：
+                                        </label>
+                                        <input type="number" class="form-control" id="filterByStrikePercentage" 
+                                               value="-25" step="0.1" style="width: 65px;">
+                                        <label class="form-check-label me-2" for="filterByStrikePercentage">
+                                            %，
+                                        </label>
+                                    </div>
+                                    <div class="form-group d-flex align-items-center">
+                                        <label class="form-check-label me-2" for="filterBySellerReturn">
+                                            卖方回报率过滤 (>)：
+                                        </label>
+                                        <input type="number" class="form-control" id="filterBySellerReturn" 
+                                               value="5" step="0.1" style="width: 50px;">
+                                        <label class="form-check-label me-2" for="filterBySellerReturn">
+                                            %
                                         </label>
                                     </div>
                                 </div>
