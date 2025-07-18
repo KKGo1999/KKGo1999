@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterBySellerReturn = document.getElementById('filterBySellerReturn');
     const tradierKeyButton = document.getElementById('tradierKeyButton');
     const refreshOverviewBtn = document.getElementById('refreshOverviewBtn');
+    const advancedAnalysisBtn = document.getElementById('advancedAnalysisBtn');
     
     // 候选列表数据
     let candidateOptions = [];
@@ -102,6 +103,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     refreshOverviewBtn.textContent = '刷新';
                 });
             });
+        }
+
+        // 高级分析按钮
+        if (advancedAnalysisBtn) {
+            advancedAnalysisBtn.addEventListener('click', openAdvancedAnalysis);
         }
         
         try {
@@ -1080,5 +1086,150 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+    }
+
+    // ---------------- 高级分析窗口 ----------------
+    async function openAdvancedAnalysis() {
+        const symbol = stockSelect.value.trim();
+        if (!symbol) {
+            alert('请先选择股票代码');
+            return;
+        }
+
+        // 收集到期日
+        const today = new Date();
+        const allDates = Array.from(expirySelect.options).map(o => o.value).filter(v => v);
+        const validDates = allDates.filter(dateStr => {
+            const d = new Date(dateStr);
+            const diff = Math.ceil((d - today) / (1000 * 60 * 60 * 24));
+            return diff >= 14 && diff <= 365;
+        });
+
+        if (validDates.length === 0) {
+            alert('没有14至365天之间的有效到期日');
+            return;
+        }
+
+        const optionType = callOption.checked ? 'call' : 'put';
+
+        // 打开新标签页
+        const win = window.open('', '_blank');
+        if (!win) {
+            alert('无法打开新窗口，请检查浏览器弹窗设置');
+            return;
+        }
+
+        win.document.write(`<html><head><title>${symbol} 高级分析</title>` +
+            '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"></head>' +
+            '<body><div class="container my-3"><h3>高级卖方回报率分析 - ' + symbol + ' (' + optionType.toUpperCase() + ')</h3>' +
+            '<div class="mb-3">执行价范围：' +
+            '<input type="number" id="minStrike" placeholder="Min" class="form-control d-inline-block" style="width:110px;">' +
+            '<span class="mx-2">-</span>' +
+            '<input type="number" id="maxStrike" placeholder="Max" class="form-control d-inline-block" style="width:110px;">' +
+            '<button id="applyStrikeFilter" class="btn btn-sm btn-primary ms-2">过滤</button>' +
+            '</div>' +
+            '<div id="progressText" class="mb-2">加载进度: 0 / 0 (0%)</div>' +
+            '<div id="analysisContent" class="mt-4">数据加载中...</div>' +
+            '</div></body></html>');
+          
+        try {
+            const stockData = await apiService.getStockPrice(symbol);
+            const stockPrice = stockData.price;
+
+            // 收集所有期权链
+            const matrix = {}; // strike -> { expiry: return }
+
+            // 初始化进度显示
+            const progressElem = win.document.getElementById('progressText');
+
+            for (let idx = 0; idx < validDates.length; idx++) {
+                const expiry = validDates[idx];
+                try {
+                    const chain = await apiService.getOptionsChain(symbol, expiry, optionType);
+                    const expiryDateObj = new Date(expiry);
+                    const daysToExpiry = Math.max(1, Math.ceil((expiryDateObj - today) / (1000 * 60 * 60 * 24)));
+
+                    chain.forEach(opt => {
+                        const bid = opt.bid || 0;
+                        if (bid === 0) return; // 跳过无买价
+
+                        const premium = bid * 100 - 1.0; // 收取权利金，减手续费
+                        let collateral;
+                        if (optionType === 'put') {
+                            collateral = opt.strike * 100;
+                        } else {
+                            collateral = stockPrice * 100;
+                        }
+
+                        const annualReturn = (premium / collateral) * (365 / daysToExpiry) * 100;
+
+                        if (!matrix[opt.strike]) matrix[opt.strike] = {};
+                        matrix[opt.strike][expiry] = annualReturn;
+                    });
+                } catch (e) {
+                    console.error('获取期权链失败', symbol, expiry, e);
+                }
+
+                // 更新进度
+                if (progressElem) {
+                    const pct = ((idx + 1) / validDates.length * 100).toFixed(0);
+                    progressElem.textContent = `加载进度: ${idx + 1} / ${validDates.length} (${pct}%)`;
+                }
+            }
+
+            const strikes = Object.keys(matrix).map(Number).sort((a, b) => a - b);
+
+            // 生成表格HTML
+            let html = '<div class="table-responsive"><table id="resultTable" class="table table-sm table-bordered text-center">';
+            html += '<thead><tr><th>执行价</th><th>相对差%</th>';
+            validDates.forEach(d => {
+                html += `<th class="text-nowrap">${d}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            strikes.forEach(strike => {
+                const diffPerc = ((strike / stockPrice) * 100 - 100).toFixed(2);
+                const rowId = `row-${strike}`;
+                html += `<tr data-strike="${strike}" id="${rowId}"><td><strong>${strike.toFixed(2)}</strong></td><td>${diffPerc}%</td>`;
+
+                // 获取该行所有回报率数组以找出前三
+                const returnsArr = validDates.map(d => matrix[strike][d]);
+                const topIdx = [...returnsArr.entries()].filter(([i,v])=>v!==undefined)
+                    .sort((a,b)=>b[1]-a[1]).slice(0,3).map(([i,_])=>i);
+
+                validDates.forEach((d,idx) => {
+                    const val = matrix[strike][d];
+                    let cell = '--';
+                    let cls = '';
+                    if (val !== undefined) {
+                        cell = val.toFixed(2) + '%';
+                        cls = val >= 15 ? 'text-success fw-bold' : (val >= 8 ? 'text-success' : '');
+                        if (topIdx.includes(idx)) cls += ' table-warning';
+                    }
+                    html += `<td class="${cls}">${cell}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+
+            win.document.getElementById('analysisContent').innerHTML = html;
+            if (progressElem) progressElem.remove();
+
+            // 添加过滤脚本
+            win.document.write(`<script>
+                document.getElementById('applyStrikeFilter').addEventListener('click', function() {
+                    const min = parseFloat(document.getElementById('minStrike').value) || -Infinity;
+                    const max = parseFloat(document.getElementById('maxStrike').value) || Infinity;
+                    document.querySelectorAll('#resultTable tbody tr').forEach(tr => {
+                        const strike = parseFloat(tr.getAttribute('data-strike'));
+                        tr.style.display = (strike >= min && strike <= max) ? '' : 'none';
+                    });
+                });
+            <\/script>`);
+        } catch (err) {
+            console.error('高级分析失败:', err);
+            win.document.getElementById('analysisContent').innerHTML = '<div class="alert alert-danger">分析过程中发生错误: ' + err.message + '</div>';
+        }
     }
 });
