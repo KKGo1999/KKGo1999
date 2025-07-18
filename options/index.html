@@ -31,6 +31,93 @@
             </div>
         </div>
         
+        <!-- 股票价格概览 -->
+        <div class="row mb-4" id="stockPriceOverview">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>最新股票价格</span>
+                        <button id="refreshOverviewBtn" class="btn btn-sm btn-outline-primary">刷新</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table id="overviewTable" class="table table-sm table-hover mb-0 sortable-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-sort="symbol">股票</th>
+                                        <th class="sortable" data-sort="price">最新价格</th>
+                                        <th class="sortable" data-sort="change">涨跌幅</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr data-symbol="BILI">
+                                        <td>哔哩哔哩 (BILI)</td>
+                                        <td id="price-BILI">--</td>
+                                        <td id="change-BILI">--</td>
+                                    </tr>
+                                    <tr data-symbol="GOOG">
+                                        <td>谷歌 (GOOG)</td>
+                                        <td id="price-GOOG">--</td>
+                                        <td id="change-GOOG">--</td>
+                                    </tr>
+                                    <tr data-symbol="LMND">
+                                        <td>柠檬水 (LMND)</td>
+                                        <td id="price-LMND">--</td>
+                                        <td id="change-LMND">--</td>
+                                    </tr>
+                                    <tr data-symbol="PDD">
+                                        <td>拼多多 (PDD)</td>
+                                        <td id="price-PDD">--</td>
+                                        <td id="change-PDD">--</td>
+                                    </tr>
+                                    <tr data-symbol="RKLB">
+                                        <td>火箭实验室 (RKLB)</td>
+                                        <td id="price-RKLB">--</td>
+                                        <td id="change-RKLB">--</td>
+                                    </tr>
+                                    <tr data-symbol="TEM">
+                                        <td>Tempus (TEM)</td>
+                                        <td id="price-TEM">--</td>
+                                        <td id="change-TEM">--</td>
+                                    </tr>
+                                    <tr data-symbol="TSLA">
+                                        <td>特斯拉 (TSLA)</td>
+                                        <td id="price-TSLA">--</td>
+                                        <td id="change-TSLA">--</td>
+                                    </tr>
+                                    <tr data-symbol="TSLL">
+                                        <td>特斯拉多头ETF (TSLL)</td>
+                                        <td id="price-TSLL">--</td>
+                                        <td id="change-TSLL">--</td>
+                                    </tr>
+                                    <tr data-symbol="OSCR">
+                                        <td>OSCAR Health (OSCR)</td>
+                                        <td id="price-OSCR">--</td>
+                                        <td id="change-OSCR">--</td>
+                                    </tr>
+                                    <tr data-symbol="HIMS">
+                                        <td>Hims &amp; Hers (HIMS)</td>
+                                        <td id="price-HIMS">--</td>
+                                        <td id="change-HIMS">--</td>
+                                    </tr>
+                                    <tr data-symbol="HOOD">
+                                        <td>Roobinhood (HOOD)</td>
+                                        <td id="price-HOOD">--</td>
+                                        <td id="change-HOOD">--</td>
+                                    </tr>
+                                    <tr data-symbol="AMD">
+                                        <td>AMD (AMD)</td>
+                                        <td id="price-AMD">--</td>
+                                        <td id="change-AMD">--</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="tab-content" id="mainTabContent">
             <!-- 期权链分析选项卡 -->
             <div class="tab-pane fade show active options-container" id="options-content" role="tabpanel">

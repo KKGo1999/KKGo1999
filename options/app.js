@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterByStrikePercentage = document.getElementById('filterByStrikePercentage');
     const filterBySellerReturn = document.getElementById('filterBySellerReturn');
     const tradierKeyButton = document.getElementById('tradierKeyButton');
+    const refreshOverviewBtn = document.getElementById('refreshOverviewBtn');
     
     // 候选列表数据
     let candidateOptions = [];
@@ -88,6 +89,20 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 初始化表格排序
         initSortableTable();
+
+        // 概览表格初始化 & 刷新按钮
+        initStockOverviewTable();
+        if (refreshOverviewBtn) {
+            refreshOverviewBtn.addEventListener('click', () => {
+                // 禁用按钮并显示加载状态
+                refreshOverviewBtn.disabled = true;
+                refreshOverviewBtn.textContent = '加载中...';
+                updateStockPriceOverview().finally(() => {
+                    refreshOverviewBtn.disabled = false;
+                    refreshOverviewBtn.textContent = '刷新';
+                });
+            });
+        }
         
         try {
             // 默认加载第一个股票
@@ -224,40 +239,146 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // 加载股票数据
-    async function loadStockData(symbol) {
+    async function loadStockData(symbol, updateMainUI = true) {
         try {
-            // 清空到期日选择器并显示加载中状态
-            expirySelect.innerHTML = '<option value="">加载中...</option>';
-            
+            // 需要更新主界面时才处理界面相关逻辑
+            if (updateMainUI) {
+                // 清空到期日选择器并显示加载中状态
+                expirySelect.innerHTML = '<option value="">加载中...</option>';
+            }
+
             // 加载股票价格
             const data = await apiService.getStockPrice(symbol);
-            currentPrice.textContent = `当前价格: $${data.price.toFixed(2)}`;
-            
-            const changeClass = data.change >= 0 ? 'positive-change' : 'negative-change';
-            const changeSign = data.change >= 0 ? '+' : '';
-            priceChange.textContent = `涨跌幅: ${changeSign}${data.change.toFixed(2)} (${changeSign}${(data.change / (data.price - data.change) * 100).toFixed(2)}%)`;
-            priceChange.className = `h6 ${changeClass}`;
-            
-            // 更新数据源指示器
-            updateDataSourceIndicator(true);
-            
-            // 加载期权到期日 - 移除直接引用dates
-            await loadExpiryDates(symbol);
-            
-            // 不再直接引用dates变量，从loadExpiryDates返回后，根据expirySelect是否有选择的值来判断是否加载期权链
-            if (expirySelect.value) {
-                await loadOptionsChain();
+
+            if (updateMainUI) {
+                // 更新主价格显示
+                currentPrice.textContent = `当前价格: $${data.price.toFixed(2)}`;
+                const changeClass = data.change >= 0 ? 'positive-change' : 'negative-change';
+                const changeSign = data.change >= 0 ? '+' : '';
+                priceChange.textContent = `涨跌幅: ${changeSign}${data.change.toFixed(2)} (${changeSign}${(data.change / (data.price - data.change) * 100).toFixed(2)}%)`;
+                priceChange.className = `h6 ${changeClass}`;
+                // 更新数据源指示器
+                updateDataSourceIndicator(true);
+                // 加载期权到期日并在需要时刷新期权链
+                await loadExpiryDates(symbol);
+                if (expirySelect.value) {
+                    await loadOptionsChain();
+                }
             }
+
+            // 无论是否更新主UI，都返回获取到的数据，方便其他组件复用
+            return data;
         } catch (error) {
             console.error('Error loading stock data:', error);
-            
-            // 更新数据源指示器
-            updateDataSourceIndicator(false);
-            
-            // 错误处理 - 清空到期日选择器并显示错误信息
-            expirySelect.innerHTML = '<option value="">获取到期日失败</option>';
-            optionsData.innerHTML = '<tr><td colspan="14" class="text-center">加载期权数据出错: ' + error.message + '</td></tr>';
+            if (updateMainUI) {
+                // 更新数据源指示器
+                updateDataSourceIndicator(false);
+                // 错误处理 - 清空到期日选择器并显示错误信息
+                expirySelect.innerHTML = '<option value="">获取到期日失败</option>';
+                optionsData.innerHTML = '<tr><td colspan="14" class="text-center">加载期权数据出错: ' + error.message + '</td></tr>';
+            }
+            throw error;
         }
+    }
+
+    // ---------------- 顶部股票价格概览 ----------------
+    const overviewSymbols = ['BILI','GOOG','LMND','PDD','RKLB','TEM','TSLA','TSLL','OSCR','HIMS','HOOD','AMD'];
+    async function updateStockPriceOverview() {
+        for (const sym of overviewSymbols) {
+            try {
+                // 静默获取数据，避免影响主界面
+                const data = await loadStockData(sym, false);
+                const priceCell = document.getElementById(`price-${sym}`);
+                const changeCell = document.getElementById(`change-${sym}`);
+                if (!priceCell || !changeCell) continue;
+                priceCell.textContent = `$${data.price.toFixed(2)}`;
+                const changeSign = data.change >= 0 ? '+' : '';
+                const percent = (data.change / (data.price - data.change)) * 100;
+                changeCell.textContent = `${changeSign}${percent.toFixed(2)}% (${changeSign}${data.change.toFixed(2)})`;
+                changeCell.className = data.change >= 0 ? 'positive-change' : 'negative-change';
+            } catch (e) {
+                console.error('更新股票概览失败:', sym, e);
+            }
+        }
+    }
+
+    // 移除自动刷新，改为手动按钮触发
+
+    // 初始化概览表格排序和行点击
+    function initStockOverviewTable() {
+        const overviewTable = document.getElementById('overviewTable');
+        if (!overviewTable) {
+            console.error('overviewTable not found');
+            return;
+        }
+
+        const headers = overviewTable.querySelectorAll('th.sortable');
+        const overviewSortConfig = { column: null, direction: 'asc' };
+
+        // 排序函数
+        const sortOverviewRows = (column, direction) => {
+            const tbody = overviewTable.tBodies[0];
+            if (!tbody) return;
+            const rows = Array.from(tbody.rows);
+            rows.sort((a, b) => {
+                let valA, valB;
+                const symA = a.getAttribute('data-symbol');
+                const symB = b.getAttribute('data-symbol');
+
+                const numFromText = (text) => {
+                    const match = text.match(/[-+]?\d*\.?\d+/);
+                    return match ? parseFloat(match[0]) : 0;
+                };
+
+                if (column === 'symbol') {
+                    valA = symA;
+                    valB = symB;
+                } else if (column === 'price') {
+                    valA = numFromText(document.getElementById(`price-${symA}`).textContent);
+                    valB = numFromText(document.getElementById(`price-${symB}`).textContent);
+                } else if (column === 'change') {
+                    valA = numFromText(document.getElementById(`change-${symA}`).textContent);
+                    valB = numFromText(document.getElementById(`change-${symB}`).textContent);
+                }
+
+                if (valA < valB) return direction === 'asc' ? -1 : 1;
+                if (valA > valB) return direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
+        };
+
+        headers.forEach(header => {
+            header.addEventListener('click', function() {
+                const sortKey = this.getAttribute('data-sort');
+                if (overviewSortConfig.column === sortKey) {
+                    overviewSortConfig.direction = overviewSortConfig.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    overviewSortConfig.column = sortKey;
+                    overviewSortConfig.direction = 'asc';
+                }
+
+                headers.forEach(h => h.classList.remove('sort-asc', 'sort-desc', 'active-sort'));
+                this.classList.add('active-sort');
+                this.classList.add(overviewSortConfig.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+
+                sortOverviewRows(overviewSortConfig.column, overviewSortConfig.direction);
+            });
+        });
+
+        // 行点击事件: 设置股票选择
+        Array.from(overviewTable.tBodies[0].rows).forEach(row => {
+            row.addEventListener('click', function() {
+                const sym = this.getAttribute('data-symbol');
+                if (!sym) return;
+                stockSelect.value = sym;
+                const changeEvent = new Event('change');
+                stockSelect.dispatchEvent(changeEvent);
+                // 滚动到顶部，方便查看主信息
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        });
     }
     
     // 加载期权到期日
