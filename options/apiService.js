@@ -277,23 +277,8 @@ if (localStorage.getItem('tradierApiKey')) {
     apiService.tradierKey = localStorage.getItem('tradierApiKey');
 }
 
-stockSelect.addEventListener('change', async () => {
-    const symbol = stockSelect.value.trim();
-    if (!symbol) {
-        currentPrice.textContent = `当前价格: --`;
-        priceChange.textContent = `涨跌幅: --`;
-        priceChange.className = 'h6';
-        expirySelect.innerHTML = '<option value="">请输入有效的股票代码</option>';
-        optionsData.innerHTML = '<tr><td colspan="14" class="text-center">请输入有效的股票代码</td></tr>';
-        return;
-    }
-    
-    const stockData = await loadStockData(symbol); 
-    
-    if (stockData && expirySelect.value) {
-        await loadOptionsChain(stockData.price); 
-    }
-});
+// 已在 app.js 中统一监听 stockSelect 的 change 事件，避免重复请求
+// stockSelect.addEventListener(...) 已移除
 
 async function loadStockData(symbol) {
     try {

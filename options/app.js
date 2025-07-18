@@ -120,7 +120,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const symbol = stockSelect.value;
                 if (symbol && symbol.trim() !== '') {
                     await loadStockData(symbol);
-                    loadOptionsChain();
                 } else {
                     console.error('Selected symbol is empty or invalid');
                     showMessage('请选择一个有效的股票代码', true);
