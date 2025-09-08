@@ -1,26 +1,7 @@
-### Hi there 👋 (KKGo1999's profile)
-Hello，我是KK Go，AI 程序猿、攻城狮。对AI、通用人工智能、LLM模型（如GPT）、视觉模型非常感兴趣。
+### Hi there 👋
+
+Hello, I'm K. As an AI engineer, I'm working on projects related to AI agents, LLMs, and VLMs.
 
 [![](https://shields.io/github/stars/kkgo1999/Stable-diffusion-person?style=social)](https://github.com/KKGo1999) &nbsp;
-[![](https://shields.io/twitter/follow/kkgo1999?label=Follow)](https://twitter.com/kkgo1999) &nbsp;
-[![](https://img.shields.io/badge/Telegram--green?style=social&logo=telegram)](https://t.me/+kS-jBrht-ZRiZTU1) &nbsp;
-[![](https://img.shields.io/badge/WeChat%20%E5%BE%AE%E4%BF%A1--green?style=social&logo=wechat)](https://www.kkgo1999.top/img/kkgo1999.wechat.jpg) &nbsp;
-[![](https://img.shields.io/badge/Youtube--green?style=social&logo=youtube)](https://youtube.com/@KKGo1999) &nbsp;
-[![](https://img.shields.io/badge/Bilibili%20B%E7%AB%99--green?style=social&logo=bilibili)](https://space.bilibili.com/406715814) &nbsp;
+[![](https://shields.io/twitter/follow/kkgo1999?label=Follow)](https://x.com/kevinKKGo) &nbsp;
 
-更多介绍欢迎访问的主页 [www.KKGo1999.top](https://www.KKGo1999.top)
-
-<!--
-**KKGo1999/KKGo1999** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
-
-Here are some ideas to get you started:
-
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
