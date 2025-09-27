@@ -1120,7 +1120,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         win.document.write(`<html><head><title>${symbol} 高级分析</title>` +
-            '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"></head>' +
+            '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">' +
+            '<style>.table-container{position:relative;max-height:70vh;overflow:auto;}#resultTable thead th{position:sticky;top:0;z-index:3;background:var(--bs-body-bg,#fff);}#resultTable th:first-child,#resultTable td:first-child{position:sticky;left:0;z-index:2;background:var(--bs-body-bg,#fff);}#resultTable thead th:first-child{z-index:4;}</style></head>' +
             '<body><div class="container my-3"><h3>高级卖方回报率分析 - ' + symbol + ' (' + optionType.toUpperCase() + ')</h3>' +
             '<div class="mb-3">执行价范围：' +
             '<input type="number" id="minStrike" placeholder="Min" class="form-control d-inline-block" style="width:110px;">' +
@@ -1180,7 +1181,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const strikes = Object.keys(matrix).map(Number).sort((a, b) => a - b);
 
             // 生成表格HTML
-            let html = '<div class="table-responsive"><table id="resultTable" class="table table-sm table-bordered text-center">';
+            let html = '<div class="table-container"><table id="resultTable" class="table table-sm table-bordered text-center">';
             html += '<thead><tr><th>执行价</th><th>相对差%</th>';
             validDates.forEach(d => {
                 html += `<th class="text-nowrap">${d}</th>`;
