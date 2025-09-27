@@ -1217,6 +1217,37 @@ document.addEventListener('DOMContentLoaded', () => {
             win.document.getElementById('analysisContent').innerHTML = html;
             if (progressElem) progressElem.remove();
 
+            // 计算并设置推荐的最小/最大执行价（整数）：
+            // minStrike >= 0.65 * 基准价格，maxStrike <= 0.9 * 基准价格
+            // 这里将基准价格解释为当前股价 stockPrice，并对结果进行夹取到可用执行价范围
+            try {
+                const minInput = win.document.getElementById('minStrike');
+                const maxInput = win.document.getElementById('maxStrike');
+                if (minInput && maxInput) {
+                    const base = stockPrice;
+                    let recommendedMin = Math.ceil(0.65 * base);
+                    let recommendedMax = Math.floor(0.9 * base);
+
+                    if (Array.isArray(strikes) && strikes.length > 0) {
+                        const minAvail = Math.min(...strikes);
+                        const maxAvail = Math.max(...strikes);
+                        recommendedMin = Math.min(Math.max(recommendedMin, minAvail), maxAvail);
+                        recommendedMax = Math.max(Math.min(recommendedMax, maxAvail), minAvail);
+                    }
+
+                    if (recommendedMin > recommendedMax) {
+                        const temp = recommendedMin;
+                        recommendedMin = recommendedMax;
+                        recommendedMax = temp;
+                    }
+
+                    minInput.value = recommendedMin;
+                    maxInput.value = recommendedMax;
+                }
+            } catch (e) {
+                console.warn('设置推荐执行价范围失败:', e);
+            }
+
             // 添加过滤脚本
             win.document.write(`<script>
                 document.getElementById('applyStrikeFilter').addEventListener('click', function() {
@@ -1227,6 +1258,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         tr.style.display = (strike >= min && strike <= max) ? '' : 'none';
                     });
                 });
+                document.getElementById('applyStrikeFilter').click();
             <\/script>`);
         } catch (err) {
             console.error('高级分析失败:', err);
