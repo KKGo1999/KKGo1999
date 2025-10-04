@@ -1139,6 +1139,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 收集所有期权链
             const matrix = {}; // strike -> { expiry: return }
+            const bidMatrix = {}; // strike -> { expiry: bid }
 
             // 初始化进度显示
             const progressElem = win.document.getElementById('progressText');
@@ -1164,6 +1165,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         const annualReturn = (premium / collateral) * (365 / daysToExpiry) * 100;
 
+                        if (!bidMatrix[opt.strike]) bidMatrix[opt.strike] = {};
+                        bidMatrix[opt.strike][expiry] = bid;
+
                         if (!matrix[opt.strike]) matrix[opt.strike] = {};
                         matrix[opt.strike][expiry] = annualReturn;
                     });
@@ -1181,8 +1185,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const strikes = Object.keys(matrix).map(Number).sort((a, b) => a - b);
 
             // 生成表格HTML
-            let html = '<div class="table-container"><table id="resultTable" class="table table-sm table-bordered text-center">';
-            html += '<thead><tr><th>执行价</th><th>相对差%</th>';
+            let html = '<div class="table-container"><table id="resultTable" class="table table-sm table-bordered text-center align-middle">';
+            html += '<thead><tr><th>价格</th><th>相对差%</th>';
             validDates.forEach(d => {
                 html += `<th class="text-nowrap">${d}</th>`;
             });
@@ -1200,10 +1204,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 validDates.forEach((d,idx) => {
                     const val = matrix[strike][d];
+                    const bidVal = bidMatrix[strike] ? bidMatrix[strike][d] : undefined;
                     let cell = '--';
                     let cls = '';
                     if (val !== undefined) {
                         cell = val.toFixed(2) + '%';
+                        if (bidVal !== undefined) {
+                            cell += ` (${bidVal.toFixed(2)})`;
+                        }
                         cls = val >= 15 ? 'text-success fw-bold' : (val >= 8 ? 'text-success' : '');
                         if (topIdx.includes(idx)) cls += ' table-warning';
                     }
