@@ -287,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------------- 顶部股票价格概览 ----------------
-    const overviewSymbols = ['BILI','GOOG','LMND','PDD','RKLB','TEM','CRCL','DUOL','TSLA','TSLL','OSCR','HIMS','HOOD','CRWV','AMD'];
+    const overviewSymbols = ['BILI','GOOG','LMND','PDD','RKLB','TEM','CRCL','DUOL','TSLA','TSLL','OSCR','HIMS','HOOD','CRWV','SOFI','AMD'];
     async function updateStockPriceOverview() {
         for (const sym of overviewSymbols) {
             try {
