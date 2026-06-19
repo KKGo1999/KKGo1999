@@ -11,7 +11,7 @@ on:
 
   # Refresh delayed options data during US market hours on weekdays.
   schedule:
-    - cron: "20 13-22 * * 1-5"
+    - cron: "20,50 13-22 * * 1-5"
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
