@@ -10,17 +10,17 @@
     <link rel="apple-touch-icon" href="/img/favicon.png"/>
 </head>
 <body>
-    <div class="container mt-4">        
+    <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <ul class="nav nav-tabs" id="mainTab" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="options-tab" data-bs-toggle="tab" data-bs-target="#options-content" type="button" role="tab">期权链分析</button>
                 </li>
             </ul>
-            
+
             <div class="d-flex align-items-center">
-                <button id="tradierKeyButton" class="btn btn-sm btn-outline-primary me-3">配置Tradier API密钥</button>
-                
+                <button id="freeDataSourceButton" class="btn btn-sm btn-outline-primary me-3">免费数据源：腾讯财经 + Yahoo</button>
+
                 <div class="theme-switch-wrapper">
                     <span class="me-2">🌞</span>
                     <label class="theme-switch" for="theme-toggle">
@@ -31,7 +31,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- 股票价格概览 -->
         <div class="row mb-4" id="stockPriceOverview">
             <div class="col-12">
@@ -217,7 +217,7 @@
                                         <label class="form-check-label me-2" for="filterByStrikePercentage">
                                             相对差过滤 (<)：
                                         </label>
-                                        <input type="number" class="form-control" id="filterByStrikePercentage" 
+                                        <input type="number" class="form-control" id="filterByStrikePercentage"
                                                value="-25" step="0.1" style="width: 75px;">
                                         <label class="form-check-label me-2" for="filterByStrikePercentage">
                                             %，
@@ -227,7 +227,7 @@
                                         <label class="form-check-label me-2" for="filterBySellerReturn">
                                             卖方回报率过滤 (>)：
                                         </label>
-                                        <input type="number" class="form-control" id="filterBySellerReturn" 
+                                        <input type="number" class="form-control" id="filterBySellerReturn"
                                                value="5" step="0.1" style="width: 75px;">
                                         <label class="form-check-label me-2" for="filterBySellerReturn">
                                             %
@@ -258,7 +258,7 @@
                                         </thead>
                                         <tbody id="optionsData">
                                             <tr>
-                                                <td colspan="14" class="text-center">选择股票和到期日以加载期权数据</td>
+                                                <td colspan="16" class="text-center">选择股票和到期日以加载期权数据</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -321,4 +321,4 @@
     <script src="optionStrategies.js"></script>
     <script src="app.js"></script>
 </body>
-</html> 
+</html>

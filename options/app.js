@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearCandidates = document.getElementById('clearCandidates');
     const filterByStrikePercentage = document.getElementById('filterByStrikePercentage');
     const filterBySellerReturn = document.getElementById('filterBySellerReturn');
-    const tradierKeyButton = document.getElementById('tradierKeyButton');
+    const freeDataSourceButton = document.getElementById('freeDataSourceButton');
     const refreshOverviewBtn = document.getElementById('refreshOverviewBtn');
     const advancedAnalysisBtn = document.getElementById('advancedAnalysisBtn');
     
@@ -198,8 +198,12 @@ document.addEventListener('DOMContentLoaded', () => {
             dataSourceContainer.className = 'data-source-indicator text-center mb-2';
             document.querySelector('.options-container').prepend(dataSourceContainer);
             
-            // 添加API密钥配置按钮事件监听
-            tradierKeyButton.addEventListener('click', () => configureApiKey('tradier'));
+            // 免费数据源无需 API Key，按钮仅用于提示当前数据来源
+            if (freeDataSourceButton) {
+                freeDataSourceButton.addEventListener('click', () => {
+                    alert(`当前使用${apiService.getDataSourceName()}，无需配置 API Key。`);
+                });
+            }
             
             // 初始化数据源指示器
             updateDataSourceIndicator(true);
@@ -280,7 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateDataSourceIndicator(false);
                 // 错误处理 - 清空到期日选择器并显示错误信息
                 expirySelect.innerHTML = '<option value="">获取到期日失败</option>';
-                optionsData.innerHTML = '<tr><td colspan="14" class="text-center">加载期权数据出错: ' + error.message + '</td></tr>';
+                optionsData.innerHTML = '<tr><td colspan="16" class="text-center">加载期权数据出错: ' + error.message + '</td></tr>';
             }
             throw error;
         }
@@ -404,7 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 expirySelect.appendChild(option);
                 
                 // 清空期权链表格
-                optionsData.innerHTML = '<tr><td colspan="14" class="text-center">没有可用的期权数据</td></tr>';
+                optionsData.innerHTML = '<tr><td colspan="16" class="text-center">没有可用的期权数据</td></tr>';
                 
                 // 更新数据源指示器
                 updateDataSourceIndicator(false);
@@ -466,11 +470,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!expiryDate) return;
             
             // 显示加载中消息
-            optionsData.innerHTML = `<tr><td colspan="14" class="text-center">正在加载期权数据... (${symbol}, ${expiryDate}, ${optionType})</td></tr>`;
+            optionsData.innerHTML = `<tr><td colspan="16" class="text-center">正在加载期权数据... (${symbol}, ${expiryDate}, ${optionType})</td></tr>`;
             
             // 保存当前数据源，以便检测是否发生自动切换
             const currentSource = apiService.dataSource;
-            const sourceName = 'Tradier';
+            const sourceName = apiService.getDataSourceName();
             
             // 获取期权链数据
             let optionsChain;
@@ -488,7 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
             optionsData.innerHTML = '';
             
             if (!optionsChain || optionsChain.length === 0) {
-                optionsData.innerHTML = `<tr><td colspan="14" class="text-center">没有可用的期权数据 (${symbol}, ${expiryDate}, ${optionType})</td></tr>`;
+                optionsData.innerHTML = `<tr><td colspan="16" class="text-center">没有可用的期权数据 (${symbol}, ${expiryDate}, ${optionType})</td></tr>`;
                 return;
             }
             
@@ -731,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isReturnFiltered) activeFilters.push(`回报率过滤 (>${returnFilterValue}%)`);
                 
                 const filterInfo = document.createElement('tr');
-                filterInfo.innerHTML = `<td colspan="14" class="text-center text-muted">
+                filterInfo.innerHTML = `<td colspan="16" class="text-center text-muted">
                     <small>过滤器已启用 (${activeFilters.join(', ')}): 显示 ${displayedOptions} 个期权 (共 ${totalOptions} 个期权)</small>
                 </td>`;
                 optionsData.appendChild(filterInfo);
@@ -739,7 +743,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 如果没有期权数据，显示提示信息
             if (optionsChain.length === 0) {
-                optionsData.innerHTML = `<tr><td colspan="14" class="text-center">没有可用的期权数据</td></tr>`;
+                optionsData.innerHTML = `<tr><td colspan="16" class="text-center">没有可用的期权数据</td></tr>`;
                 return;
             }
             
@@ -752,7 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 选中并高亮显示平值行
             const rows = Array.from(optionsData.querySelectorAll('tr'));
             const atmRow = rows.find(row => 
-                parseFloat(row.cells[0].textContent) === atmOption.strike
+                parseFloat(row.cells[1]?.textContent) === atmOption.strike
             );
             
             if (atmRow) {
@@ -765,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
             analyzeOption(atmOption);
         } catch (error) {
             console.error('Error loading options chain:', error);
-            optionsData.innerHTML = `<tr><td colspan="14" class="text-center">加载期权数据出错: ${error.message}</td></tr>`;
+            optionsData.innerHTML = `<tr><td colspan="16" class="text-center">加载期权数据出错: ${error.message}</td></tr>`;
             updateDataSourceIndicator(false);
         }
     }
@@ -812,13 +816,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateDataSourceIndicator(isRealData) {
         const indicator = document.getElementById('dataSourceIndicator');
         
-        const currentSource = 'Tradier';
+        const currentSource = apiService.getDataSourceName();
         
         if (indicator) {
             indicator.innerHTML = `
                 <div class="alert alert-${isRealData ? 'info' : 'warning'} py-1 small mb-2">
                     <i class="bi ${isRealData ? 'bi-cloud-download' : 'bi-exclamation-triangle'}"></i>
-                    ${isRealData ? `使用${currentSource}市场数据` : '数据获取失败，请检查API密钥或网络连接'}
+                    ${isRealData ? `使用${currentSource}市场数据` : '数据获取失败，请检查网络连接或免费数据源可用性'}
                 </div>
             `;
             
@@ -830,37 +834,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // 配置API密钥
-    function configureApiKey(source) {
-        // 获取当前密钥
-        const currentKey = apiService.getApiKey(source);
-        
-        const newKey = prompt(
-            `请输入Tradier API密钥:`, 
-            currentKey || ''
-        );
-        
-        if (newKey !== null) {
-            const formattedKey = newKey.trim();
-            if (apiService.setApiKey(source, formattedKey)) {
-                // 更新成功
-                alert(`Tradier密钥已更新!`);
-                
-                // 刷新数据
-                if (apiService.dataSource === source) {
-                    updateStockInfo().then(() => updateExpiryDates());
-                }
-            } else {
-                alert('更新API密钥失败');
-            }
-        }
+    // 免费数据源不需要 API Key。保留这个函数名以兼容旧代码路径。
+    function configureApiKey() {
+        alert(`当前使用${apiService.getDataSourceName()}，无需配置 API Key。`);
     }
-    
-    // 检查localStorage中是否有保存的API密钥
-    if (localStorage.getItem('tradierApiKey')) {
-        apiService.tradierKey = localStorage.getItem('tradierApiKey');
-        apiService.useRealOptionsData = true;
-    }
+
+    // 清理旧版 Tradier API Key，避免用户误以为仍依赖付费/注册接口。
+    localStorage.removeItem('tradierApiKey');
 
     // 显示临时消息
     function showMessage(message, isWarning = false) {

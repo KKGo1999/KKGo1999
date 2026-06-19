@@ -11,24 +11,16 @@
   - 蝶式策略 (Butterfly Spread)
   - 跨式策略 (Straddle)
 - **数据源支持**：
-  - Tradier API (提供实时股票和期权数据)
-  - 内置模拟数据 (无API密钥时的备选方案)
+  - 腾讯财经免费公开行情接口（无需 API Key）
+  - Jina Reader 转换 Yahoo Finance 期权页面，避免浏览器直连 Yahoo API 的 CORS 限制
 
 ## 设置指南
 
-### 1. 获取Tradier API密钥
+### 1. 免费数据源
 
-为了获取真实的期权链数据，推荐使用Tradier API。请按照以下步骤获取API密钥：
+应用已改为默认从腾讯财经免费公开接口抓取美股报价，并通过 Jina Reader 读取 Yahoo Finance 期权页面中的期权链表格，不需要 Tradier 账户或 API Key。这样避免了浏览器直接请求 Yahoo Finance API 时常见的 CORS 拦截。
 
-1. 访问 [Tradier开发者网站](https://developer.tradier.com/)
-2. 创建一个账户
-3. 申请API访问权限并获取您的访问令牌（Bearer Token）
-4. 应用内配置：点击应用中的"配置Tradier API密钥"按钮，输入您的API密钥
-
-**Tradier API特点：**
-- 提供实时股票和期权数据
-- 包含希腊字母和隐含波动率信息
-- 需要有效的Tradier账户
+> 注意：腾讯财经、Jina Reader 和 Yahoo Finance 页面都不是本项目可控的官方 SLA 数据服务，接口可用性、延迟和字段完整度可能变化；如果用于真实交易，请自行核验行情来源。
 
 ### 2. 运行应用程序
 
@@ -50,28 +42,21 @@
 
 ### API密钥配置
 
-应用程序提供了两种配置API密钥的方式：
-
-1. **通过UI界面**：点击"配置Tradier API密钥"按钮，在弹出的对话框中输入API密钥
-   - 此密钥将保存在浏览器的localStorage中，下次访问时自动使用
-   - 密钥不会被发送到任何服务器
-
-2. **直接编辑源代码**：打开`apiService.js`文件，更新相应的API密钥变量
+无需配置 API 密钥。页面右上角会显示当前使用的免费数据源。
 
 ## 数据源说明
 
 应用程序支持两种数据模式：
 
-1. **真实期权数据（Tradier API）**：
-   - 提供市场期权链数据
-   - 需要有效的Tradier API密钥
-   - 包含完整的希腊字母数据
-   - 如果API调用失败，会自动回退到模拟数据
+1. **腾讯财经免费公开行情接口**：
+   - 获取股票最新报价和涨跌幅
+   - 无需 API Key
+   - 响应带浏览器可用的 CORS 头，适合纯前端直接请求
 
-2. **模拟数据**：
-   - 当API不可用或未配置时自动使用
-   - 基于Black-Scholes模型生成的合理数据
-   - 包含波动率微笑和真实市场特性的模拟
+2. **Jina Reader + Yahoo Finance 期权页面**：
+   - 将 Yahoo Finance 期权页面转换为可解析的 Markdown 表格
+   - 解析合约名、执行价、最新价、买卖价、成交量、未平仓量和隐含波动率
+   - Yahoo 页面未提供希腊字母时，Delta/Gamma/Theta/Vega 显示为 0
 
 当前数据源状态会在期权链表格上方显示。
 
@@ -80,6 +65,6 @@
 - **前端框架**：HTML5, CSS3, JavaScript (ES6+)
 - **UI组件**：Bootstrap 5
 - **数学模型**：Black-Scholes期权定价模型
-- **API集成**：Tradier API
+- **API集成**：腾讯财经行情接口 + Jina Reader + Yahoo Finance 期权页面
 
 ## 免责声明
