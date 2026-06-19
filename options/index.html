@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>期权分析</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260620-1">
+    <link rel="stylesheet" href="styles.css?v=20260620-2">
     <link rel="icon" type="image/png" href="/img/favicon.png">
     <link rel="apple-touch-icon" href="/img/favicon.png"/>
 </head>
@@ -310,34 +310,67 @@
                     </div>
                 </div>
 
-                <div class="row mt-4 d-none" id="advancedAnalysisSection">
-                    <div class="col-12">
-                        <div class="card advanced-analysis-card">
-                            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                <div>
-                                    <span id="advancedAnalysisTitle">高级卖方回报率分析</span>
-                                    <small id="advancedAnalysisSubtitle" class="ms-2 fw-normal"></small>
-                                </div>
-                                <button id="collapseAdvancedAnalysis" class="btn btn-sm btn-outline-secondary">收起</button>
-                            </div>
-                            <div class="card-body">
-                                <div class="advanced-analysis-toolbar d-flex flex-wrap align-items-end gap-3 mb-3">
-                                    <div>
-                                        <label for="advancedMinStrike" class="form-label mb-1">最小执行价</label>
-                                        <input type="number" id="advancedMinStrike" placeholder="Min" class="form-control form-control-sm">
-                                    </div>
-                                    <div>
-                                        <label for="advancedMaxStrike" class="form-label mb-1">最大执行价</label>
-                                        <input type="number" id="advancedMaxStrike" placeholder="Max" class="form-control form-control-sm">
-                                    </div>
-                                    <button id="applyAdvancedStrikeFilter" class="btn btn-sm btn-primary">过滤</button>
-                                    <div id="advancedAnalysisProgress" class="text-muted small ms-auto">准备中...</div>
-                                </div>
-                                <div id="advancedAnalysisContent"></div>
-                            </div>
+                <section class="advanced-workbench d-none" id="advancedAnalysisSection" aria-live="polite">
+                    <div class="advanced-workbench-header">
+                        <div class="advanced-title-group">
+                            <div class="advanced-eyebrow">高级分析</div>
+                            <h2 id="advancedAnalysisTitle">卖方回报率矩阵</h2>
+                            <p id="advancedAnalysisSubtitle" class="advanced-subtitle">选择股票和到期日后生成分析结果</p>
+                        </div>
+                        <div class="advanced-header-actions">
+                            <span id="advancedAnalysisProgress" class="advanced-progress-pill">准备中</span>
+                            <button id="collapseAdvancedAnalysis" class="btn btn-sm btn-outline-secondary">收起</button>
                         </div>
                     </div>
-                </div>
+
+                    <div class="advanced-summary-grid" aria-label="高级分析摘要">
+                        <div class="advanced-metric">
+                            <span>股票</span>
+                            <strong id="advancedMetricSymbol">--</strong>
+                        </div>
+                        <div class="advanced-metric">
+                            <span>类型</span>
+                            <strong id="advancedMetricType">--</strong>
+                        </div>
+                        <div class="advanced-metric">
+                            <span>当前价</span>
+                            <strong id="advancedMetricPrice">--</strong>
+                        </div>
+                        <div class="advanced-metric">
+                            <span>到期日</span>
+                            <strong id="advancedMetricDates">--</strong>
+                        </div>
+                        <div class="advanced-metric">
+                            <span>执行价</span>
+                            <strong id="advancedMetricStrikes">--</strong>
+                        </div>
+                        <div class="advanced-metric">
+                            <span>显示行</span>
+                            <strong id="advancedMetricVisibleRows">--</strong>
+                        </div>
+                    </div>
+
+                    <div class="advanced-control-bar">
+                        <div class="advanced-filter-fields">
+                            <div class="advanced-field">
+                                <label for="advancedMinStrike">最小执行价</label>
+                                <input type="number" id="advancedMinStrike" placeholder="Min" inputmode="decimal" class="form-control form-control-sm">
+                            </div>
+                            <div class="advanced-field">
+                                <label for="advancedMaxStrike">最大执行价</label>
+                                <input type="number" id="advancedMaxStrike" placeholder="Max" inputmode="decimal" class="form-control form-control-sm">
+                            </div>
+                            <button id="applyAdvancedStrikeFilter" class="btn btn-sm btn-primary">过滤</button>
+                        </div>
+                        <div class="advanced-legend" aria-label="回报率标记">
+                            <span><i class="advanced-dot advanced-dot-strong"></i>15%+</span>
+                            <span><i class="advanced-dot advanced-dot-good"></i>8%+</span>
+                            <span><i class="advanced-dot advanced-dot-top"></i>行内前三</span>
+                        </div>
+                    </div>
+
+                    <div id="advancedAnalysisContent" class="advanced-content"></div>
+                </section>
             </div>
         </div>
     </div>
@@ -349,6 +382,6 @@
     <script src="optionsCalculator.js?v=20260619-3"></script>
     <script src="optionStrategies.js?v=20260619-3"></script>
     <script src="app.js?v=20260619-3"></script>
-    <script src="advancedAnalysisFix.js?v=20260620-3"></script>
+    <script src="advancedAnalysisFix.js?v=20260620-4"></script>
 </body>
 </html>

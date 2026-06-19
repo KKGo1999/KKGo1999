@@ -1,5 +1,7 @@
 (function() {
     function getValidExpiryDates(expirySelect) {
+        if (!expirySelect) return [];
+
         const today = new Date();
         return Array.from(expirySelect.options)
             .map(option => option.value)
@@ -21,35 +23,95 @@
             minStrike: document.getElementById('advancedMinStrike'),
             maxStrike: document.getElementById('advancedMaxStrike'),
             applyFilter: document.getElementById('applyAdvancedStrikeFilter'),
-            collapse: document.getElementById('collapseAdvancedAnalysis')
+            collapse: document.getElementById('collapseAdvancedAnalysis'),
+            metrics: {
+                symbol: document.getElementById('advancedMetricSymbol'),
+                type: document.getElementById('advancedMetricType'),
+                price: document.getElementById('advancedMetricPrice'),
+                dates: document.getElementById('advancedMetricDates'),
+                strikes: document.getElementById('advancedMetricStrikes'),
+                visibleRows: document.getElementById('advancedMetricVisibleRows')
+            }
         };
     }
 
-    function showSection(elements, symbol, optionType) {
+    function setText(element, value) {
+        if (element) element.textContent = value;
+    }
+
+    function setMetric(elements, name, value) {
+        if (elements.metrics && elements.metrics[name]) {
+            elements.metrics[name].textContent = value;
+        }
+    }
+
+    function formatOptionType(optionType) {
+        return optionType === 'call' ? 'CALL' : 'PUT';
+    }
+
+    function showSection(elements, symbol, optionType, validDates) {
         elements.section.classList.remove('d-none');
-        elements.title.textContent = `高级卖方回报率分析 - ${symbol}`;
-        elements.subtitle.textContent = `${optionType.toUpperCase()} | 14-365天到期`;
-        elements.progress.textContent = '加载进度: 0 / 0 (0%)';
-        elements.content.innerHTML = '<div class="text-center py-4">数据加载中...</div>';
+        setText(elements.title, `${symbol.toUpperCase()} 卖方回报率矩阵`);
+        setText(elements.subtitle, `${formatOptionType(optionType)} | 14-365天到期 | 年化回报率`);
+        setText(elements.progress, `0/${validDates.length}`);
+        setMetric(elements, 'symbol', symbol.toUpperCase());
+        setMetric(elements, 'type', formatOptionType(optionType));
+        setMetric(elements, 'price', '--');
+        setMetric(elements, 'dates', `${validDates.length} 个`);
+        setMetric(elements, 'strikes', '--');
+        setMetric(elements, 'visibleRows', '--');
+        elements.content.innerHTML = [
+            '<div class="advanced-empty-state">',
+            '<div class="advanced-spinner" aria-hidden="true"></div>',
+            '<div>正在加载期权链数据...</div>',
+            '</div>'
+        ].join('');
         elements.section.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
+    function getFilterBounds(elements) {
+        const minValue = elements.minStrike && elements.minStrike.value.trim();
+        const maxValue = elements.maxStrike && elements.maxStrike.value.trim();
+        const min = minValue === '' ? -Infinity : parseFloat(minValue);
+        const max = maxValue === '' ? Infinity : parseFloat(maxValue);
+
+        return {
+            min: Number.isFinite(min) ? min : -Infinity,
+            max: Number.isFinite(max) ? max : Infinity
+        };
+    }
+
+    function updateVisibleRowsMetric(elements) {
+        const rows = Array.from(document.querySelectorAll('#advancedResultTable tbody tr'));
+        if (!rows.length) {
+            setMetric(elements, 'visibleRows', '--');
+            return;
+        }
+
+        const visibleRows = rows.filter(row => row.style.display !== 'none').length;
+        setMetric(elements, 'visibleRows', `${visibleRows}/${rows.length}`);
+    }
+
     function applyStrikeFilter(elements) {
-        const min = parseFloat(elements.minStrike.value) || -Infinity;
-        const max = parseFloat(elements.maxStrike.value) || Infinity;
+        const { min, max } = getFilterBounds(elements);
+
         document.querySelectorAll('#advancedResultTable tbody tr').forEach(row => {
             const strike = parseFloat(row.getAttribute('data-strike'));
             row.style.display = (strike >= min && strike <= max) ? '' : 'none';
         });
+
+        updateVisibleRowsMetric(elements);
     }
 
-    function setRecommendedStrikeRange(elements, strikes, stockPrice) {
+    function setRecommendedStrikeRange(elements, strikes, stockPrice, optionType) {
         if (!strikes.length) return;
 
         const minAvail = Math.min(...strikes);
         const maxAvail = Math.max(...strikes);
-        let recommendedMin = Math.min(Math.max(Math.ceil(0.65 * stockPrice), minAvail), maxAvail);
-        let recommendedMax = Math.max(Math.min(Math.floor(0.9 * stockPrice), maxAvail), minAvail);
+        const lowerRatio = optionType === 'call' ? 1.05 : 0.65;
+        const upperRatio = optionType === 'call' ? 1.35 : 0.9;
+        let recommendedMin = Math.min(Math.max(Math.ceil(lowerRatio * stockPrice), minAvail), maxAvail);
+        let recommendedMax = Math.max(Math.min(Math.floor(upperRatio * stockPrice), maxAvail), minAvail);
 
         if (recommendedMin > recommendedMax) {
             [recommendedMin, recommendedMax] = [recommendedMax, recommendedMin];
@@ -59,20 +121,41 @@
         elements.maxStrike.value = recommendedMax;
     }
 
-    function renderMatrix(elements, validDates, stockPrice, matrix, bidMatrix) {
+    function renderMatrix(elements, symbol, optionType, validDates, stockPrice, matrix, bidMatrix) {
         const strikes = Object.keys(matrix).map(Number).sort((a, b) => a - b);
-        let html = '<div class="advanced-analysis-table-container"><table id="advancedResultTable" class="table table-sm table-bordered text-center align-middle">';
-        html += '<thead><tr><th>价格</th><th>相对差%</th>';
+        setMetric(elements, 'price', stockPrice.toFixed(2));
+        setMetric(elements, 'dates', `${validDates.length} 个`);
+        setMetric(elements, 'strikes', `${strikes.length} 个`);
+
+        if (!strikes.length) {
+            elements.content.innerHTML = '<div class="advanced-empty-state">没有可用的买价数据，无法生成回报率矩阵。</div>';
+            updateVisibleRowsMetric(elements);
+            setText(elements.progress, '无数据');
+            return;
+        }
+
+        let html = [
+            '<div class="advanced-analysis-table-container" role="region" aria-label="高级分析矩阵" tabindex="0">',
+            '<table id="advancedResultTable" class="table table-sm table-bordered text-center align-middle advanced-matrix-table">',
+            '<thead><tr>',
+            '<th class="advanced-sticky-col" scope="col">执行价</th>',
+            '<th scope="col">相对差</th>'
+        ].join('');
 
         validDates.forEach(date => {
-            html += `<th class="text-nowrap">${date}</th>`;
+            html += `<th class="advanced-date-col" scope="col">${date}</th>`;
         });
 
         html += '</tr></thead><tbody>';
 
         strikes.forEach(strike => {
-            const diffPerc = ((strike / stockPrice) * 100 - 100).toFixed(2);
-            html += `<tr data-strike="${strike}"><td><strong>${strike.toFixed(2)}</strong></td><td>${diffPerc}%</td>`;
+            const diffValue = (strike / stockPrice) * 100 - 100;
+            const diffClass = diffValue >= 0 ? 'advanced-diff-positive' : 'advanced-diff-negative';
+            html += [
+                `<tr data-strike="${strike}">`,
+                `<td class="advanced-sticky-col advanced-strike-cell"><strong>${strike.toFixed(2)}</strong></td>`,
+                `<td class="${diffClass}">${diffValue.toFixed(2)}%</td>`
+            ].join('');
 
             const returnsArr = validDates.map(date => matrix[strike][date]);
             const topIdx = [...returnsArr.entries()]
@@ -84,19 +167,25 @@
             validDates.forEach((date, idx) => {
                 const val = matrix[strike][date];
                 const bidVal = bidMatrix[strike] ? bidMatrix[strike][date] : undefined;
-                let cell = '--';
-                let cls = '';
+                const classes = ['advanced-matrix-cell'];
+                let cell = '<span class="advanced-empty-cell">--</span>';
 
                 if (val !== undefined) {
-                    cell = `${val.toFixed(2)}%`;
-                    if (bidVal !== undefined) {
-                        cell += ` (${bidVal.toFixed(2)})`;
+                    if (val >= 15) {
+                        classes.push('is-strong');
+                    } else if (val >= 8) {
+                        classes.push('is-good');
                     }
-                    cls = val >= 15 ? 'text-success fw-bold' : (val >= 8 ? 'text-success' : '');
-                    if (topIdx.includes(idx)) cls += ' table-warning';
+
+                    if (topIdx.includes(idx)) classes.push('is-top');
+
+                    cell = `<span class="advanced-return">${val.toFixed(2)}%</span>`;
+                    if (bidVal !== undefined) {
+                        cell += `<span class="advanced-bid">买 ${bidVal.toFixed(2)}</span>`;
+                    }
                 }
 
-                html += `<td class="${cls}">${cell}</td>`;
+                html += `<td class="${classes.join(' ')}">${cell}</td>`;
             });
 
             html += '</tr>';
@@ -104,9 +193,9 @@
 
         html += '</tbody></table></div>';
         elements.content.innerHTML = html;
-        setRecommendedStrikeRange(elements, strikes, stockPrice);
+        setRecommendedStrikeRange(elements, strikes, stockPrice, optionType);
         applyStrikeFilter(elements);
-        elements.progress.textContent = `完成: ${validDates.length} 个到期日 / ${strikes.length} 个执行价`;
+        setText(elements.progress, '完成');
     }
 
     async function openAdvancedAnalysis(event) {
@@ -136,7 +225,7 @@
         }
 
         const optionType = callOption && callOption.checked ? 'call' : 'put';
-        showSection(elements, symbol, optionType);
+        showSection(elements, symbol, optionType, validDates);
 
         try {
             const apiService = window.apiService || new APIService();
@@ -172,15 +261,15 @@
                 }
 
                 const pct = (((idx + 1) / validDates.length) * 100).toFixed(0);
-                elements.progress.textContent = `加载进度: ${idx + 1} / ${validDates.length} (${pct}%)`;
+                setText(elements.progress, `${idx + 1}/${validDates.length} (${pct}%)`);
             }
 
-            renderMatrix(elements, validDates, stockPrice, matrix, bidMatrix);
+            renderMatrix(elements, symbol, optionType, validDates, stockPrice, matrix, bidMatrix);
         } catch (error) {
             console.error('高级分析失败:', error);
-            elements.progress.textContent = '加载失败';
-            elements.content.innerHTML = '<div class="alert alert-danger"></div>';
-            elements.content.querySelector('.alert').textContent = `分析过程中发生错误: ${error.message}`;
+            setText(elements.progress, '加载失败');
+            elements.content.innerHTML = '<div class="advanced-empty-state advanced-empty-state-error"></div>';
+            elements.content.querySelector('.advanced-empty-state-error').textContent = `分析过程中发生错误: ${error.message}`;
         }
     }
 
@@ -195,6 +284,16 @@
         if (elements.applyFilter) {
             elements.applyFilter.addEventListener('click', () => applyStrikeFilter(getElements()));
         }
+
+        [elements.minStrike, elements.maxStrike].forEach(input => {
+            if (!input) return;
+            input.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyStrikeFilter(getElements());
+                }
+            });
+        });
 
         if (elements.collapse && elements.section) {
             elements.collapse.addEventListener('click', () => {
