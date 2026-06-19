@@ -9,7 +9,13 @@
         }[char]));
     }
 
-    function createAnalysisWindow(symbol, optionType) {
+    function getCurrentTheme() {
+        return document.documentElement.getAttribute('data-theme') ||
+            localStorage.getItem('theme') ||
+            'light';
+    }
+
+    function createAnalysisWindow(symbol, optionType, theme) {
         const win = window.open('', '_blank');
         if (!win) {
             alert('无法打开新窗口，请检查浏览器弹窗设置');
@@ -18,14 +24,29 @@
 
         const doc = win.document;
         doc.title = `${symbol} 高级分析`;
+        doc.documentElement.setAttribute('data-theme', theme);
+        doc.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
 
         const bootstrapLink = doc.createElement('link');
         bootstrapLink.rel = 'stylesheet';
         bootstrapLink.href = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css';
         doc.head.appendChild(bootstrapLink);
 
+        const appStylesLink = doc.createElement('link');
+        appStylesLink.rel = 'stylesheet';
+        appStylesLink.href = new URL('styles.css', window.location.href).href;
+        doc.head.appendChild(appStylesLink);
+
         const style = doc.createElement('style');
-        style.textContent = '.table-container{position:relative;max-height:70vh;overflow:auto;}#resultTable thead th{position:sticky;top:0;z-index:3;background:var(--bs-body-bg,#fff);}#resultTable th:first-child,#resultTable td:first-child{position:sticky;left:0;z-index:2;background:var(--bs-body-bg,#fff);}#resultTable thead th:first-child{z-index:4;}';
+        style.textContent = [
+            'body{background-color:var(--bg-color,#f8f9fa);color:var(--text-color,#212529);}',
+            '.table-container{position:relative;max-height:70vh;overflow:auto;}',
+            '#resultTable thead th{position:sticky;top:0;z-index:3;background:var(--table-header-bg,var(--bs-body-bg,#fff));}',
+            '#resultTable th:first-child,#resultTable td:first-child{position:sticky;left:0;z-index:2;background:var(--card-bg,var(--bs-body-bg,#fff));}',
+            '#resultTable thead th:first-child{z-index:4;background:var(--table-header-bg,var(--bs-body-bg,#fff));}',
+            '[data-theme="dark"] #resultTable .table-warning{--bs-table-bg:rgba(255,193,7,.22);--bs-table-color:var(--text-color);background-color:rgba(255,193,7,.22)!important;color:var(--text-color)!important;}',
+            '[data-theme="dark"] #resultTable .text-success{color:var(--positive-color,#42d86c)!important;}'
+        ].join('');
         doc.head.appendChild(style);
 
         const container = doc.createElement('div');
@@ -78,7 +99,7 @@
         }
 
         const optionType = callOption && callOption.checked ? 'call' : 'put';
-        const win = createAnalysisWindow(symbol, optionType);
+        const win = createAnalysisWindow(symbol, optionType, getCurrentTheme());
         if (!win) return;
 
         try {
