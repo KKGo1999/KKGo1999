@@ -11,16 +11,17 @@
   - 蝶式策略 (Butterfly Spread)
   - 跨式策略 (Straddle)
 - **数据源支持**：
-  - Yahoo Finance 免费公开接口（无需 API Key）
-  - 浏览器直连失败时自动尝试免费的 allorigins.win 转发通道
+  - 腾讯财经免费公开行情接口（无需 API Key）
+  - Jina Reader 转换 Yahoo Finance 期权页面，避免浏览器直连 Yahoo API 的 CORS 限制
+
 
 ## 设置指南
 
 ### 1. 免费数据源
 
-应用已改为默认从 Yahoo Finance 的免费公开接口抓取美股行情、期权到期日和期权链数据，不需要 Tradier 账户或 API Key。浏览器直连 Yahoo Finance 失败时，会自动通过免费的 allorigins.win 转发通道重试，以降低 CORS 限制导致的失败概率。
+应用已改为默认从腾讯财经免费公开接口抓取美股报价，并通过 Jina Reader 读取 Yahoo Finance 期权页面中的期权链表格，不需要 Tradier 账户或 API Key。这样避免了浏览器直接请求 Yahoo Finance API 时常见的 CORS 拦截。
 
-> 注意：Yahoo Finance 和 allorigins.win 都不是官方 SLA 数据服务，接口可用性、延迟和字段完整度可能变化；如果用于真实交易，请自行核验行情来源。
+> 注意：腾讯财经、Jina Reader 和 Yahoo Finance 页面都不是本项目可控的官方 SLA 数据服务，接口可用性、延迟和字段完整度可能变化；如果用于真实交易，请自行核验行情来源。
 
 ### 2. 运行应用程序
 
@@ -48,14 +49,15 @@
 
 应用程序支持两种数据模式：
 
-1. **Yahoo Finance 免费公开接口**：
-   - 获取股票最新报价、涨跌幅、期权到期日和指定到期日的期权链
+1. **腾讯财经免费公开行情接口**：
+   - 获取股票最新报价和涨跌幅
    - 无需 API Key
-   - Yahoo 原始字段包含最新价、买卖价、成交量、未平仓量和隐含波动率；希腊字母字段若源接口未提供则显示为 0
+   - 响应带浏览器可用的 CORS 头，适合纯前端直接请求
 
-2. **allorigins.win 免费转发通道**：
-   - 仅在浏览器直连 Yahoo Finance 失败时自动使用
-   - 用于绕过部分浏览器环境中的 CORS 限制
+2. **Jina Reader + Yahoo Finance 期权页面**：
+   - 将 Yahoo Finance 期权页面转换为可解析的 Markdown 表格
+   - 解析合约名、执行价、最新价、买卖价、成交量、未平仓量和隐含波动率
+   - Yahoo 页面未提供希腊字母时，Delta/Gamma/Theta/Vega 显示为 0
 
 当前数据源状态会在期权链表格上方显示。
 
@@ -64,6 +66,6 @@
 - **前端框架**：HTML5, CSS3, JavaScript (ES6+)
 - **UI组件**：Bootstrap 5
 - **数学模型**：Black-Scholes期权定价模型
-- **API集成**：Yahoo Finance 免费公开接口 + allorigins.win 免费转发通道
+- **API集成**：腾讯财经行情接口 + Jina Reader + Yahoo Finance 期权页面
 
 ## 免责声明
