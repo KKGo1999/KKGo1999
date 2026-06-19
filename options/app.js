@@ -30,6 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
         column: null,
         direction: 'asc'  // 'asc' or 'desc'
     };
+    let stockInputTimer = null;
+    let lastLoadedSymbol = '';
     
     // 初始化
     init();
@@ -110,11 +112,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            // 添加事件监听器
-            stockSelect.addEventListener('change', async () => {
-                const symbol = stockSelect.value;
+            async function loadSelectedStockFromInput() {
+                window.clearTimeout(stockInputTimer);
+                const symbol = stockSelect.value.trim().toUpperCase();
                 if (symbol && symbol.trim() !== '') {
-                    await loadStockData(symbol);
+                    if (symbol === lastLoadedSymbol) return;
+                    try {
+                        await loadStockData(symbol);
+                        lastLoadedSymbol = symbol;
+                    } catch (error) {
+                        console.error('加载股票失败:', symbol, error);
+                    }
                 } else {
                     console.error('Selected symbol is empty or invalid');
                     showMessage('请选择一个有效的股票代码', true);
@@ -124,6 +132,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         optionsData.innerHTML = '<tr><td colspan="16" class="text-center">请先选择一个股票</td></tr>';
                     }
                 }
+            }
+
+            // 添加事件监听器
+            stockSelect.addEventListener('change', loadSelectedStockFromInput);
+            stockSelect.addEventListener('input', () => {
+                window.clearTimeout(stockInputTimer);
+                const symbol = stockSelect.value.trim();
+                if (!symbol) return;
+                stockInputTimer = window.setTimeout(loadSelectedStockFromInput, 600);
             });
             
             if (optionsData) {
@@ -273,6 +290,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateDataSourceIndicator(true);
                 // 加载期权到期日。矩阵会监听股票变化并自动刷新，不再默认渲染单一期权链。
                 await loadExpiryDates(symbol);
+                document.dispatchEvent(new CustomEvent('stockDataLoaded', {
+                    detail: { symbol }
+                }));
                 if (optionsData && expirySelect.value) {
                     await loadOptionsChain();
                 }

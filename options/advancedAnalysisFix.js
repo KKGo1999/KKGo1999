@@ -337,9 +337,7 @@
             button.addEventListener('click', event => openAdvancedAnalysis(event, { waitForDates: true }), true);
         }
 
-        if (stockSelect) {
-            stockSelect.addEventListener('change', scheduleAutomaticAnalysis);
-        }
+        document.addEventListener('stockDataLoaded', scheduleAutomaticAnalysis);
 
         [callOption, putOption].forEach(input => {
             if (input) input.addEventListener('change', scheduleAutomaticAnalysis);
