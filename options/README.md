@@ -12,16 +12,16 @@
   - 跨式策略 (Straddle)
 - **数据源支持**：
   - 腾讯财经免费公开行情接口（无需 API Key）
-  - Jina Reader 转换 Yahoo Finance 期权页面，避免浏览器直连 Yahoo API 的 CORS 限制
+  - 部署时生成的 Cboe 延迟期权链静态缓存（无需 API Key）
 
 
 ## 设置指南
 
 ### 1. 免费数据源
 
-应用已改为默认从腾讯财经免费公开接口抓取美股报价，并通过 Jina Reader 读取 Yahoo Finance 期权页面中的期权链表格，不需要 Tradier 账户或 API Key。这样避免了浏览器直接请求 Yahoo Finance API 时常见的 CORS 拦截。
+应用默认从腾讯财经免费公开接口抓取美股报价，并在 GitHub Pages 部署时从 Cboe 延迟行情生成期权链静态 JSON，不需要 Tradier 账户或 API Key。浏览器读取同源缓存文件，避免直接请求第三方期权接口时遇到 CORS 或代理连接失败。
 
-> 注意：腾讯财经、Jina Reader 和 Yahoo Finance 页面都不是本项目可控的官方 SLA 数据服务，接口可用性、延迟和字段完整度可能变化；如果用于真实交易，请自行核验行情来源。
+> 注意：腾讯财经和 Cboe 延迟行情都不是本项目可控的官方 SLA 数据服务，接口可用性、延迟和字段完整度可能变化；如果用于真实交易，请自行核验行情来源。
 
 ### 2. 运行应用程序
 
@@ -54,10 +54,10 @@
    - 无需 API Key
    - 响应带浏览器可用的 CORS 头，适合纯前端直接请求
 
-2. **Jina Reader + Yahoo Finance 期权页面**：
-   - 将 Yahoo Finance 期权页面转换为可解析的 Markdown 表格
-   - 解析合约名、执行价、最新价、买卖价、成交量、未平仓量和隐含波动率
-   - Yahoo 页面未提供希腊字母时，Delta/Gamma/Theta/Vega 显示为 0
+2. **Cboe 延迟期权链静态缓存**：
+   - GitHub Actions 部署前从 Cboe delayed quotes JSON 生成同源缓存文件
+   - 解析合约名、执行价、最新价、买卖价、成交量、未平仓量、隐含波动率和希腊字母
+   - 定时工作流会在美股交易时段刷新并重新部署缓存
 
 当前数据源状态会在期权链表格上方显示。
 
@@ -66,6 +66,6 @@
 - **前端框架**：HTML5, CSS3, JavaScript (ES6+)
 - **UI组件**：Bootstrap 5
 - **数学模型**：Black-Scholes期权定价模型
-- **API集成**：腾讯财经行情接口 + Jina Reader + Yahoo Finance 期权页面
+- **API集成**：腾讯财经行情接口 + Cboe 延迟期权链静态缓存
 
 ## 免责声明
