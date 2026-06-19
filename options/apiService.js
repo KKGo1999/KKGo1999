@@ -1,33 +1,30 @@
 class APIService {
     constructor() {
-        // Tradier API配置
-        this.tradierKey = ''; // Tradier API Key (Bearer Token)
-        this.tradierUrl = 'https://api.tradier.com/v1';
-        
-        // 默认使用 Tradier
-        this.dataSource = 'tradier';
-        
-        // 是否显示调试信息
+        // 免费数据源配置：
+        // 1) 腾讯财经公开行情接口：用于股票报价，响应带 CORS 头，浏览器可直接 fetch。
+        // 2) Jina Reader + Yahoo Finance 页面：用于读取 Yahoo 期权链页面的 Markdown 表格，
+        //    避免浏览器直连 Yahoo Finance API 时被 CORS 拦截。
+        this.tencentQuoteUrl = 'https://qt.gtimg.cn/q=';
+        this.jinaReaderUrl = 'https://r.jina.ai/http://finance.yahoo.com/quote';
+        this.dataSource = 'tencent-jina-yahoo';
         this.debug = true;
+        this.pageCache = new Map();
+        this.cacheTtlMs = 2 * 60 * 1000;
     }
-    
-    // 获取当前数据源名称
+
     getDataSourceName() {
-        return 'Tradier';
+        return '腾讯财经行情 + Yahoo Finance 页面数据';
     }
-    
-    // 调试日志
+
     logDebug(message, data = null) {
-        if (this.debug) {
-            if (data) {
-                console.log(`[DEBUG] ${message}`, data);
-            } else {
-                console.log(`[DEBUG] ${message}`);
-            }
+        if (!this.debug) return;
+        if (data) {
+            console.log(`[DEBUG] ${message}`, data);
+        } else {
+            console.log(`[DEBUG] ${message}`);
         }
     }
-    
-    // 错误日志
+
     logError(message, error = null) {
         if (error) {
             console.error(`[ERROR] ${message}`, error);
@@ -35,234 +32,200 @@ class APIService {
             console.error(`[ERROR] ${message}`);
         }
     }
-    
-    // 获取股票价格
+
+    normalizeSymbol(symbol) {
+        return String(symbol || '').trim().toUpperCase();
+    }
+
+    async fetchText(url) {
+        const cached = this.pageCache.get(url);
+        if (cached && Date.now() - cached.timestamp < this.cacheTtlMs) {
+            return cached.text;
+        }
+
+        this.logDebug(`请求URL: ${url}`);
+        const response = await fetch(url, { headers: { 'Accept': 'text/plain,*/*' } });
+        if (!response.ok) {
+            throw new Error(`HTTP错误: ${response.status}`);
+        }
+
+        const text = await response.text();
+        this.pageCache.set(url, { text, timestamp: Date.now() });
+        return text;
+    }
+
+    async getTencentQuote(symbol) {
+        const normalizedSymbol = this.normalizeSymbol(symbol);
+        const url = `${this.tencentQuoteUrl}us${encodeURIComponent(normalizedSymbol)}`;
+        const text = await this.fetchText(url);
+        const match = text.match(/="([^"]*)"/);
+        if (!match) {
+            throw new Error(`腾讯财经未返回${normalizedSymbol}行情`);
+        }
+
+        const fields = match[1].split('~');
+        const price = Number(fields[3]);
+        const previousClose = Number(fields[4]);
+        const change = Number(fields[31] || (price - previousClose));
+        const changePct = Number(fields[32] || (previousClose ? (change / previousClose) * 100 : 0));
+
+        if (!Number.isFinite(price) || price <= 0) {
+            throw new Error(`无法解析${normalizedSymbol}的腾讯财经行情`);
+        }
+
+        return { price, change, changePct };
+    }
+
+    getYahooOptionsPageUrl(symbol) {
+        return `${this.jinaReaderUrl}/${encodeURIComponent(symbol)}/options/`;
+    }
+
+    async getYahooOptionsPage(symbol) {
+        const normalizedSymbol = this.normalizeSymbol(symbol);
+        const text = await this.fetchText(this.getYahooOptionsPageUrl(normalizedSymbol));
+        if (/Oops, something went wrong/i.test(text) || !text.includes('| Contract Name |')) {
+            throw new Error(`Yahoo Finance 暂无${normalizedSymbol}可解析的期权链页面`);
+        }
+        return text;
+    }
+
+    parseContractExpiry(contractSymbol, underlyingSymbol) {
+        const normalizedUnderlying = this.normalizeSymbol(underlyingSymbol).replace(/[^A-Z0-9.]/g, '');
+        const regex = new RegExp(`^${normalizedUnderlying.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d{2})(\\d{2})(\\d{2})[CP]`, 'i');
+        const match = String(contractSymbol || '').match(regex);
+        if (!match) return null;
+
+        const year = 2000 + Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+
+    parseNumber(value) {
+        const cleaned = String(value || '')
+            .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+            .replace(/[%,$,]/g, '')
+            .replace(/—|N\/A/g, '')
+            .trim();
+        const number = Number(cleaned);
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    parseMarkdownTableRows(text) {
+        return text
+            .split('\n')
+            .filter(line => line.startsWith('| [') && line.includes('finance.yahoo.com/quote/'))
+            .map(line => line.split('|').slice(1, -1).map(cell => cell.trim()));
+    }
+
+    parseContractSymbol(cell) {
+        const match = cell.match(/\[([^\]]+)\]/);
+        return match ? match[1].trim() : '';
+    }
+
+    parseOptionRows(text, symbol) {
+        return this.parseMarkdownTableRows(text).map(cells => {
+            const contractSymbol = this.parseContractSymbol(cells[0]);
+            const typeMatch = contractSymbol.match(/[0-9]{6}([CP])/i);
+            const optionType = typeMatch?.[1]?.toUpperCase() === 'C' ? 'call' : 'put';
+            const impliedVolatility = this.parseNumber(cells[10]) / 100;
+
+            return {
+                contractSymbol,
+                optionType,
+                expiryDate: this.parseContractExpiry(contractSymbol, symbol),
+                lastTradeDate: cells[1] || null,
+                strike: this.parseNumber(cells[2]),
+                lastPrice: this.parseNumber(cells[3]),
+                bid: this.parseNumber(cells[4]),
+                ask: this.parseNumber(cells[5]),
+                change: this.parseNumber(cells[6]),
+                volume: this.parseNumber(cells[8]),
+                openInterest: this.parseNumber(cells[9]),
+                impliedVolatility,
+                delta: 0,
+                gamma: 0,
+                theta: 0,
+                vega: 0,
+                currency: 'USD'
+            };
+        }).filter(option => option.contractSymbol && option.expiryDate && option.strike > 0);
+    }
+
     async getStockPrice(symbol) {
+        const normalizedSymbol = this.normalizeSymbol(symbol);
+        if (!normalizedSymbol) {
+            throw new Error('股票代码不能为空');
+        }
+
         try {
-            this.logDebug(`正在获取${symbol}的股票价格`);
-            return await this._getTradierStockPrice(symbol);
+            return await this.getTencentQuote(normalizedSymbol);
         } catch (error) {
-            this.logError(`获取${symbol}股票价格失败`, error);
+            this.logError(`获取${normalizedSymbol}股票价格失败`, error);
             throw error;
         }
     }
-    
-    // 从Tradier获取股票价格
-    async _getTradierStockPrice(symbol) {
-        try {
-            // 构建API请求URL
-            const url = `${this.tradierUrl}/markets/quotes?symbols=${symbol}`;
-            
-            this.logDebug(`请求URL: ${url}`);
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${this.tradierKey}`,
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP错误: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            if (data && data.quotes && data.quotes.quote) {
-                const quote = Array.isArray(data.quotes.quote) ? data.quotes.quote[0] : data.quotes.quote;
-                const price = quote.last;
-                const change = quote.change;
-                const changePct = quote.change_percentage;
-                
-                this.logDebug('Successfully fetched Tradier data', { price, change, changePct });
-                
-                return {
-                    price,
-                    change,
-                    changePct
-                };
-            } else {
-                this.logDebug('No Tradier data available');
-                throw new Error(`无法获取${symbol}的股票价格`);
-            }
-        } catch (error) {
-            this.logError('Error fetching Tradier stock price', error);
-            throw error;
-        }
-    }
-    
-    // 获取期权到期日
+
     async getOptionsExpiryDates(symbol) {
+        const normalizedSymbol = this.normalizeSymbol(symbol);
+        if (!normalizedSymbol) {
+            throw new Error('股票代码不能为空');
+        }
+
         try {
-            this.logDebug(`正在获取${symbol}的期权到期日`);
-            return await this._getTradierOptionsExpiryDates(symbol);
+            const page = await this.getYahooOptionsPage(normalizedSymbol);
+            const dates = [...new Set(this.parseOptionRows(page, normalizedSymbol).map(option => option.expiryDate))]
+                .filter(Boolean)
+                .sort();
+
+            if (dates.length === 0) {
+                throw new Error(`${normalizedSymbol}没有可解析的期权到期日`);
+            }
+
+            this.logDebug(`从免费页面数据源获取了${dates.length}个到期日`);
+            return dates;
         } catch (error) {
-            this.logError(`获取${symbol}期权到期日失败`, error);
+            this.logError(`获取${normalizedSymbol}期权到期日失败`, error);
             throw error;
         }
     }
-    
-    // 从Tradier获取期权到期日
-    async _getTradierOptionsExpiryDates(symbol) {
-        try {
-            // 构建API请求URL
-            const url = `${this.tradierUrl}/markets/options/expirations?symbol=${symbol}&includeAllRoots=true`;
-            
-            this.logDebug(`请求URL: ${url}`);
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${this.tradierKey}`,
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP错误: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            console.log('Expirations response:', data);
-            
-            if (data && data.expirations) {
-                let dates = [];
-                
-                // 处理 date 字段是数组的情况
-                if (data.expirations.date && Array.isArray(data.expirations.date)) {
-                    dates = data.expirations.date;
-                }
-                // 处理 date 字段是单个字符串的情况
-                else if (data.expirations.date) {
-                    dates = [data.expirations.date];
-                }
-                // 兼容旧格式：处理 expiration 字段的情况
-                else if (data.expirations.expiration) {
-                    // 提取不重复的到期日
-                    dates = Array.isArray(data.expirations.expiration) 
-                        ? data.expirations.expiration.map(item => item.date)
-                        : [data.expirations.expiration.date];
-                }
-                
-                // 按日期排序
-                dates.sort();
-                
-                this.logDebug(`从Tradier获取了${dates.length}个到期日`);
-                return dates;
-            } else {
-                this.logDebug('No Tradier expiry dates available');
-                throw new Error(`无法获取${symbol}的期权到期日`);
-            }
-        } catch (error) {
-            this.logError('Error fetching Tradier expiry dates', error);
-            throw error;
-        }
-    }
-    
-    // 获取期权链数据
+
     async getOptionsChain(symbol, expiryDate, optionType) {
+        const normalizedSymbol = this.normalizeSymbol(symbol);
+        if (!normalizedSymbol) {
+            throw new Error('股票代码不能为空');
+        }
+        if (!expiryDate) {
+            throw new Error('期权到期日不能为空');
+        }
+
         try {
-            this.logDebug(`正在获取${symbol}的期权链 (到期日: ${expiryDate}, 类型: ${optionType})`);
-            return await this._getTradierOptionsChain(symbol, expiryDate, optionType);
+            const page = await this.getYahooOptionsPage(normalizedSymbol);
+            const optionsChain = this.parseOptionRows(page, normalizedSymbol)
+                .filter(option => option.expiryDate === expiryDate && option.optionType === optionType)
+                .sort((a, b) => a.strike - b.strike);
+
+            if (optionsChain.length === 0) {
+                throw new Error(`无法找到${normalizedSymbol}在${expiryDate}到期的${optionType}期权`);
+            }
+
+            this.logDebug(`成功解析了${optionsChain.length}个免费期权合约`);
+            return optionsChain;
         } catch (error) {
-            this.logError(`获取${symbol}期权链失败`, error);
+            this.logError(`获取${normalizedSymbol}期权链失败`, error);
             throw error;
         }
     }
-    
-    // 设置API密钥
-    setApiKey(source, newKey) {
-        if (source === 'tradier') {
-            this.tradierKey = newKey;
-            localStorage.setItem('tradierApiKey', newKey);
-            return true;
-        }
+
+    // 兼容旧版 UI：免费数据源不需要 API Key。
+    setApiKey() {
         return false;
     }
-    
-    // 获取API密钥
-    getApiKey(source) {
-        if (source === 'tradier') {
-            return this.tradierKey;
-        }
+
+    getApiKey() {
         return null;
-    }
-    
-    // 从Tradier获取期权链数据
-    async _getTradierOptionsChain(symbol, expiryDate, optionType) {
-        try {
-            // 构建API请求URL
-            const url = `${this.tradierUrl}/markets/options/chains?symbol=${symbol}&expiration=${expiryDate}&greeks=true`;
-            
-            this.logDebug(`请求URL: ${url}`);
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${this.tradierKey}`,
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP错误: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            console.log('=== Tradier API响应 ===');
-            console.log(JSON.stringify(data, null, 2));
-            
-            // 检查响应格式是否正确
-            if (!data || !data.options || !data.options.option) {
-                this.logDebug('No Tradier options data available or invalid format');
-                throw new Error(`无法获取${symbol}的期权数据`);
-            }
-            
-            // Tradier API返回所有期权（看涨和看跌），我们需要根据optionType筛选
-            let optionsArray = data.options.option;
-            
-            // 确保optionsArray是数组
-            if (!Array.isArray(optionsArray)) {
-                optionsArray = [optionsArray];
-            }
-            
-            // 根据期权类型筛选
-            const filteredOptions = optionsArray.filter(option => 
-                option.option_type.toLowerCase() === optionType.toLowerCase()
-            );
-            
-            // 记录找到的期权数量
-            this.logDebug(`从Tradier获取了${filteredOptions.length}个${optionType}期权`);
-            
-            if (filteredOptions.length === 0) {
-                this.logDebug(`无法找到${expiryDate}到期的${optionType}期权`);
-                throw new Error(`无法找到${symbol}在${expiryDate}到期的${optionType}期权`);
-            }
-            
-            // 从Tradier响应中提取所需的字段
-            const optionsChain = filteredOptions.map(option => {
-                // 使用希腊字母数据（如果有）
-                const greeks = option.greeks || {};
-                
-                return {
-                    strike: parseFloat(option.strike) || 0,
-                    lastPrice: parseFloat(option.last) || 0,
-                    bid: parseFloat(option.bid) || 0,
-                    ask: parseFloat(option.ask) || 0,
-                    volume: parseInt(option.volume) || 0,
-                    openInterest: parseInt(option.open_interest) || 0,
-                    impliedVolatility: parseFloat(greeks.mid_iv) || 0,
-                    delta: parseFloat(greeks.delta) || 0,
-                    gamma: parseFloat(greeks.gamma) || 0,
-                    theta: parseFloat(greeks.theta) || 0,
-                    vega: parseFloat(greeks.vega) || 0
-                };
-            });
-            
-            this.logDebug(`成功解析了${optionsChain.length}个期权合约`);
-            
-            // 按执行价排序
-            return optionsChain.sort((a, b) => a.strike - b.strike);
-            
-        } catch (error) {
-            this.logError('Error fetching options chain from Tradier', error);
-            throw error;
-        }
     }
 }
 
@@ -271,85 +234,3 @@ const apiService = new APIService();
 
 // 在控制台公开API服务，方便调试
 window.apiService = apiService;
-
-// 初始化时从本地存储加载API密钥
-if (localStorage.getItem('tradierApiKey')) {
-    apiService.tradierKey = localStorage.getItem('tradierApiKey');
-}
-
-// 已在 app.js 中统一监听 stockSelect 的 change 事件，避免重复请求
-// stockSelect.addEventListener(...) 已移除
-
-async function loadStockData(symbol) {
-    try {
-        if (!symbol || symbol.trim() === '') {
-            currentPrice.textContent = `当前价格: --`;
-            priceChange.textContent = `涨跌幅: --`;
-            priceChange.className = 'h6';
-            expirySelect.innerHTML = '<option value="">请输入有效的股票代码</option>';
-            optionsData.innerHTML = '<tr><td colspan="14" class="text-center">请输入有效的股票代码</td></tr>';
-            return null;
-        }
-
-        expirySelect.innerHTML = '<option value="">加载中...</option>';
-        
-        const data = await apiService.getStockPrice(symbol); 
-        currentPrice.textContent = `当前价格: $${data.price.toFixed(2)}`;
-        
-        await loadExpiryDates(symbol); 
-        
-        return data;
-        
-    } catch (error) {
-        console.error('Error loading stock data:', error);
-        expirySelect.innerHTML = '<option value="">获取到期日失败</option>';
-        optionsData.innerHTML = '<tr><td colspan="14" class="text-center">加载期权数据出错: ' + error.message + '</td></tr>';
-        return null;
-    }
-}
-
-async function loadExpiryDates(symbol) {
-    try {
-        if (!symbol || symbol.trim() === '') {
-            expirySelect.innerHTML = '<option value="">请输入有效的股票代码</option>';
-            return;
-        }
-        
-        console.log(`正在获取${symbol}的期权到期日...`);
-        // ...
-    } catch (error) {
-        // ...
-    }
-}
-
-async function loadOptionsChain(stockPriceParam) {
-    try {
-        const symbol = stockSelect.value.trim();
-        if (!symbol) {
-            optionsData.innerHTML = '<tr><td colspan="14" class="text-center">请输入有效的股票代码</td></tr>';
-            return;
-        }
-        
-        const expiryDate = expirySelect.value;
-        const optionType = callOption.checked ? 'call' : 'put';
-        const isFiltered = filterOptionsTable && filterOptionsTable.checked;
-        
-        if (!expiryDate) return;
-        
-        optionsData.innerHTML = `<tr><td colspan="14" class="text-center">正在加载期权数据... (${symbol}, ${expiryDate}, ${optionType})</td></tr>`;
-        
-        let stockPrice;
-        if (stockPriceParam !== undefined) {
-            stockPrice = stockPriceParam;
-        } else {
-            const stockData = await apiService.getStockPrice(symbol);
-            stockPrice = stockData.price;
-        }
-        
-        let optionsChain = await apiService.getOptionsChain(symbol, expiryDate, optionType);
-        
-        // ... rest of the function ...
-    } catch (error) {
-        // ... error handling ...
-    }
-} 
