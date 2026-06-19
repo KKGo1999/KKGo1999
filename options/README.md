@@ -14,6 +14,7 @@
   - 腾讯财经免费公开行情接口（无需 API Key）
   - Jina Reader 转换 Yahoo Finance 期权页面，避免浏览器直连 Yahoo API 的 CORS 限制
 
+
 ## 设置指南
 
 ### 1. 免费数据源
