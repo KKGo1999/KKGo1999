@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM元素 - 期权链分析
     const stockSelect = document.getElementById('stockSelect');
     const expirySelect = document.getElementById('expirySelect');
+    const expirySummary = document.getElementById('expirySummary');
     const currentPrice = document.getElementById('currentPrice');
     const priceChange = document.getElementById('priceChange');
     const optionsData = document.getElementById('optionsData');
@@ -65,28 +66,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function init() {
         // 初始化主题切换
         initThemeSwitch();
-        
-        // 检查关键DOM元素是否存在
-        if (!selectAllOptions) {
-            console.error('selectAllOptions checkbox not found!');
-        }
-        if (!candidatesList) {
-            console.error('candidatesList element not found!');
-        }
-        if (!clearCandidates) {
-            console.error('clearCandidates button not found!');
-        }
-        console.log('DOM Elements initialized:', {
-            selectAllOptions,
-            candidatesList,
-            clearCandidates
-        });
-        
+
         // 创建数据源指示器
         createDataSourceIndicators();
         
-        // Load candidates from storage first
-        loadCandidatesFromStorage();
+        if (candidatesList) {
+            loadCandidatesFromStorage();
+        }
         
         // 初始化表格排序
         initSortableTable();
@@ -118,7 +104,10 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 showMessage('请选择一个有效的股票代码', true);
                 expirySelect.innerHTML = '<option value="">请选择一个股票</option>';
-                optionsData.innerHTML = '<tr><td colspan="16" class="text-center">请先选择一个股票</td></tr>';
+                setExpirySummary('选择股票后自动读取');
+                if (optionsData) {
+                    optionsData.innerHTML = '<tr><td colspan="16" class="text-center">请先选择一个股票</td></tr>';
+                }
             }
             
             // 添加事件监听器
@@ -130,32 +119,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.error('Selected symbol is empty or invalid');
                     showMessage('请选择一个有效的股票代码', true);
                     expirySelect.innerHTML = '<option value="">请选择一个股票</option>';
-                    optionsData.innerHTML = '<tr><td colspan="16" class="text-center">请先选择一个股票</td></tr>';
+                    setExpirySummary('选择股票后自动读取');
+                    if (optionsData) {
+                        optionsData.innerHTML = '<tr><td colspan="16" class="text-center">请先选择一个股票</td></tr>';
+                    }
                 }
             });
             
-            expirySelect.addEventListener('change', loadOptionsChain);
-            callOption.addEventListener('change', loadOptionsChain);
-            putOption.addEventListener('change', loadOptionsChain);
+            if (optionsData) {
+                expirySelect.addEventListener('change', loadOptionsChain);
+                callOption.addEventListener('change', loadOptionsChain);
+                putOption.addEventListener('change', loadOptionsChain);
+            }
             
-            selectAllOptions.addEventListener('change', function() {
-                const checkboxes = document.querySelectorAll('#optionsData input[type="checkbox"]');
-                checkboxes.forEach(checkbox => {
-                    checkbox.checked = selectAllOptions.checked;
-                    
-                    // 触发 change 事件以更新候选列表
-                    if (checkbox.checked) {
-                        const event = new Event('change');
-                        checkbox.dispatchEvent(event);
-                    } else {
-                        // 如果取消选中，从候选列表中移除
-                        const optionId = checkbox.getAttribute('data-option-id');
-                        removeFromCandidateList(optionId);
-                    }
+            if (selectAllOptions) {
+                selectAllOptions.addEventListener('change', function() {
+                    const checkboxes = document.querySelectorAll('#optionsData input[type="checkbox"]');
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = selectAllOptions.checked;
+
+                        // 触发 change 事件以更新候选列表
+                        if (checkbox.checked) {
+                            const event = new Event('change');
+                            checkbox.dispatchEvent(event);
+                        } else {
+                            // 如果取消选中，从候选列表中移除
+                            const optionId = checkbox.getAttribute('data-option-id');
+                            removeFromCandidateList(optionId);
+                        }
+                    });
                 });
-            });
+            }
             
-            clearCandidates.addEventListener('click', clearCandidateList);
+            if (clearCandidates) {
+                clearCandidates.addEventListener('click', clearCandidateList);
+            }
             
             // 添加期权链表格过滤器事件监听
             if (filterByStrikePercentage) {
@@ -171,8 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (savedStrikeFilterState !== null) {
                     filterByStrikePercentage.value = savedStrikeFilterState;
                 }
-            } else {
-                console.error('Strike percentage filter input not found');
             }
             
             if (filterBySellerReturn) {
@@ -188,15 +184,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (savedReturnFilterState !== null) {
                     filterBySellerReturn.value = savedReturnFilterState;
                 }
-            } else {
-                console.error('Seller return filter input not found');
             }
             
             // 显示数据源指示器
-            const dataSourceContainer = document.createElement('div');
-            dataSourceContainer.id = 'dataSourceIndicator';
-            dataSourceContainer.className = 'data-source-indicator text-center mb-2';
-            document.querySelector('.options-container').prepend(dataSourceContainer);
+            if (!document.getElementById('dataSourceIndicator')) {
+                const dataSourceContainer = document.createElement('div');
+                dataSourceContainer.id = 'dataSourceIndicator';
+                dataSourceContainer.className = 'data-source-indicator text-center mb-2';
+                document.querySelector('.options-container').prepend(dataSourceContainer);
+            }
             
             // 免费数据源无需 API Key，按钮仅用于提示当前数据来源
             if (freeDataSourceButton) {
@@ -211,6 +207,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('初始化错误:', error);
             showMessage('加载数据时出错: ' + error.message, true);
+        }
+    }
+
+    function setExpirySummary(text) {
+        if (expirySummary) {
+            expirySummary.textContent = text;
         }
     }
     
@@ -254,6 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (updateMainUI) {
                 // 清空到期日选择器并显示加载中状态
                 expirySelect.innerHTML = '<option value="">加载中...</option>';
+                setExpirySummary('正在读取到期日...');
             }
 
             // 加载股票价格
@@ -268,9 +271,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 priceChange.className = `h6 ${changeClass}`;
                 // 更新数据源指示器
                 updateDataSourceIndicator(true);
-                // 加载期权到期日并在需要时刷新期权链
+                // 加载期权到期日。矩阵会监听股票变化并自动刷新，不再默认渲染单一期权链。
                 await loadExpiryDates(symbol);
-                if (expirySelect.value) {
+                if (optionsData && expirySelect.value) {
                     await loadOptionsChain();
                 }
             }
@@ -284,7 +287,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateDataSourceIndicator(false);
                 // 错误处理 - 清空到期日选择器并显示错误信息
                 expirySelect.innerHTML = '<option value="">获取到期日失败</option>';
-                optionsData.innerHTML = '<tr><td colspan="16" class="text-center">加载期权数据出错: ' + error.message + '</td></tr>';
+                setExpirySummary('到期日获取失败');
+                if (optionsData) {
+                    optionsData.innerHTML = '<tr><td colspan="16" class="text-center">加载期权数据出错: ' + error.message + '</td></tr>';
+                }
             }
             throw error;
         }
@@ -406,9 +412,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 option.value = "";
                 option.textContent = "无可用到期日";
                 expirySelect.appendChild(option);
+                setExpirySummary('没有可用到期日');
                 
                 // 清空期权链表格
-                optionsData.innerHTML = '<tr><td colspan="16" class="text-center">没有可用的期权数据</td></tr>';
+                if (optionsData) {
+                    optionsData.innerHTML = '<tr><td colspan="16" class="text-center">没有可用的期权数据</td></tr>';
+                }
                 
                 // 更新数据源指示器
                 updateDataSourceIndicator(false);
@@ -449,9 +458,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             expirySelect.selectedIndex = selectedIndex;
+
+            const matrixDateCount = dates.filter(date => {
+                const daysToExpiry = Math.ceil((new Date(date) - today) / (1000 * 60 * 60 * 24));
+                return daysToExpiry >= 14 && daysToExpiry <= 365;
+            }).length;
+            setExpirySummary(`${matrixDateCount} 个到期日可用于矩阵`);
         } catch (error) {
             console.error('Error loading expiry dates:', error);
             expirySelect.innerHTML = '<option value="">获取到期日失败</option>';
+            setExpirySummary('到期日获取失败');
             updateDataSourceIndicator(false);
         }
     }
@@ -459,6 +475,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // 加载期权链
     async function loadOptionsChain() {
         try {
+            if (!optionsData) return;
+
             const symbol = stockSelect.value;
             const expiryDate = expirySelect.value;
             const optionType = callOption.checked ? 'call' : 'put';
@@ -880,7 +898,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('#optionsData input[type="checkbox"]').forEach(checkbox => {
             checkbox.checked = false;
         });
-        selectAllOptions.checked = false;
+        if (selectAllOptions) {
+            selectAllOptions.checked = false;
+        }
     }
     
     // 从候选列表中移除项目
@@ -894,7 +914,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function initSortableTable() {
         const candidatesTable = document.getElementById('candidatesTable');
         if (!candidatesTable) {
-            console.error('Candidates table not found');
             return;
         }
 
@@ -979,6 +998,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 更新候选列表
     function updateCandidatesList() {
+        if (!candidatesList) return;
+
         console.log('Updating candidates list. Current candidates:', candidateOptions.length);
         
         if (candidateOptions.length === 0) {

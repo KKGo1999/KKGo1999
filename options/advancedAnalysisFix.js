@@ -1,4 +1,7 @@
 (function() {
+    let analysisRunId = 0;
+    let autoAnalysisTimer = null;
+
     function getValidExpiryDates(expirySelect) {
         if (!expirySelect) return [];
 
@@ -49,21 +52,40 @@
         return optionType === 'call' ? 'CALL' : 'PUT';
     }
 
-    function showSection(elements, symbol, optionType, validDates) {
+    function delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function waitForValidExpiryDates(expirySelect, timeoutMs = 10000) {
+        const start = Date.now();
+
+        while (Date.now() - start < timeoutMs) {
+            const validDates = getValidExpiryDates(expirySelect);
+            if (validDates.length > 0) return validDates;
+
+            const statusText = expirySelect && expirySelect.options[0] ? expirySelect.options[0].textContent : '';
+            if (/失败|无可用/.test(statusText)) return [];
+            await delay(100);
+        }
+
+        return getValidExpiryDates(expirySelect);
+    }
+
+    function showSection(elements, symbol, optionType, validDates, loadingText = '正在加载期权链数据...') {
         elements.section.classList.remove('d-none');
         setText(elements.title, `${symbol.toUpperCase()} 卖方回报率矩阵`);
         setText(elements.subtitle, `${formatOptionType(optionType)} | 14-365天到期 | 年化回报率`);
-        setText(elements.progress, `0/${validDates.length}`);
+        setText(elements.progress, validDates.length > 0 ? `0/${validDates.length}` : '准备中');
         setMetric(elements, 'symbol', symbol.toUpperCase());
         setMetric(elements, 'type', formatOptionType(optionType));
         setMetric(elements, 'price', '--');
-        setMetric(elements, 'dates', `${validDates.length} 个`);
+        setMetric(elements, 'dates', validDates.length > 0 ? `${validDates.length} 个` : '--');
         setMetric(elements, 'strikes', '--');
         setMetric(elements, 'visibleRows', '--');
         elements.content.innerHTML = [
             '<div class="advanced-empty-state">',
             '<div class="advanced-spinner" aria-hidden="true"></div>',
-            '<div>正在加载期权链数据...</div>',
+            `<div>${loadingText}</div>`,
             '</div>'
         ].join('');
         elements.section.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -198,23 +220,20 @@
         setText(elements.progress, '完成');
     }
 
-    async function openAdvancedAnalysis(event) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
+    async function openAdvancedAnalysis(event, options = {}) {
+        if (event) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }
 
         const stockSelect = document.getElementById('stockSelect');
         const expirySelect = document.getElementById('expirySelect');
         const callOption = document.getElementById('callOption');
         const symbol = stockSelect ? stockSelect.value.trim() : '';
+        const silent = options.silent === true;
 
         if (!symbol) {
-            alert('请先选择股票代码');
-            return;
-        }
-
-        const validDates = getValidExpiryDates(expirySelect);
-        if (validDates.length === 0) {
-            alert('没有14至365天之间的有效到期日');
+            if (!silent) alert('请先选择股票代码');
             return;
         }
 
@@ -224,13 +243,33 @@
             return;
         }
 
+        const runId = ++analysisRunId;
         const optionType = callOption && callOption.checked ? 'call' : 'put';
+
+        let validDates = getValidExpiryDates(expirySelect);
+        if (options.waitForDates && validDates.length === 0) {
+            showSection(elements, symbol, optionType, [], '正在读取可用到期日...');
+            validDates = await waitForValidExpiryDates(expirySelect);
+            if (runId !== analysisRunId) return;
+        }
+
+        if (validDates.length === 0) {
+            if (!silent) alert('没有14至365天之间的有效到期日');
+            elements.section.classList.remove('d-none');
+            setText(elements.title, `${symbol.toUpperCase()} 卖方回报率矩阵`);
+            setText(elements.subtitle, `${formatOptionType(optionType)} | 14-365天到期 | 年化回报率`);
+            setText(elements.progress, '无到期日');
+            elements.content.innerHTML = '<div class="advanced-empty-state">没有14至365天之间的有效到期日。</div>';
+            return;
+        }
+
         showSection(elements, symbol, optionType, validDates);
 
         try {
             const apiService = window.apiService || new APIService();
             const today = new Date();
             const stockData = await apiService.getStockPrice(symbol);
+            if (runId !== analysisRunId) return;
             const stockPrice = stockData.price;
             const matrix = {};
             const bidMatrix = {};
@@ -239,6 +278,7 @@
                 const expiry = validDates[idx];
                 try {
                     const chain = await apiService.getOptionsChain(symbol, expiry, optionType);
+                    if (runId !== analysisRunId) return;
                     const expiryDateObj = new Date(expiry);
                     const daysToExpiry = Math.max(1, Math.ceil((expiryDateObj - today) / (1000 * 60 * 60 * 24)));
 
@@ -264,8 +304,10 @@
                 setText(elements.progress, `${idx + 1}/${validDates.length} (${pct}%)`);
             }
 
+            if (runId !== analysisRunId) return;
             renderMatrix(elements, symbol, optionType, validDates, stockPrice, matrix, bidMatrix);
         } catch (error) {
+            if (runId !== analysisRunId) return;
             console.error('高级分析失败:', error);
             setText(elements.progress, '加载失败');
             elements.content.innerHTML = '<div class="advanced-empty-state advanced-empty-state-error"></div>';
@@ -273,12 +315,38 @@
         }
     }
 
+    function scheduleAutomaticAnalysis() {
+        const stockSelect = document.getElementById('stockSelect');
+        const symbol = stockSelect ? stockSelect.value.trim() : '';
+        if (!symbol) return;
+
+        window.clearTimeout(autoAnalysisTimer);
+        autoAnalysisTimer = window.setTimeout(() => {
+            openAdvancedAnalysis(null, { silent: true, waitForDates: true });
+        }, 250);
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         const button = document.getElementById('advancedAnalysisBtn');
+        const stockSelect = document.getElementById('stockSelect');
+        const callOption = document.getElementById('callOption');
+        const putOption = document.getElementById('putOption');
         const elements = getElements();
 
         if (button) {
-            button.addEventListener('click', openAdvancedAnalysis, true);
+            button.addEventListener('click', event => openAdvancedAnalysis(event, { waitForDates: true }), true);
+        }
+
+        if (stockSelect) {
+            stockSelect.addEventListener('change', scheduleAutomaticAnalysis);
+        }
+
+        [callOption, putOption].forEach(input => {
+            if (input) input.addEventListener('change', scheduleAutomaticAnalysis);
+        });
+
+        if (stockSelect && stockSelect.value.trim()) {
+            scheduleAutomaticAnalysis();
         }
 
         if (elements.applyFilter) {

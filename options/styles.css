@@ -197,6 +197,15 @@ body {
     background-color: var(--table-light-bg);
 }
 
+.parameter-summary {
+    min-height: 38px;
+    padding: 0.45rem 0.75rem;
+    color: var(--text-color);
+    background-color: var(--table-light-bg);
+    border: 1px solid var(--table-border);
+    border-radius: 4px;
+}
+
 .positive-change {
     color: var(--positive-color);
 }
