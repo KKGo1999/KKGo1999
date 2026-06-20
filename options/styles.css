@@ -96,6 +96,29 @@ body {
     -webkit-text-size-adjust: 100%;
 }
 
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 1.25rem;
+}
+
+.page-title {
+    color: var(--text-color);
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0;
+    min-width: 0;
+}
+
+@media (max-width: 480px) {
+    .page-title {
+        font-size: 1.45rem;
+    }
+}
+
 .card {
     margin-bottom: 20px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -447,7 +470,8 @@ body {
 .theme-switch-wrapper {
     display: flex;
     align-items: center;
-    margin: 0 10px;
+    flex: 0 0 auto;
+    margin: 0;
 }
 
 .theme-switch {
