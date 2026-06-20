@@ -5,11 +5,29 @@ class APIService {
         // 2) GitHub Pages 同源静态缓存：部署时从 Cboe 延迟行情生成期权链 JSON，
         //    避免浏览器直连第三方期权接口时被 CORS 或代理稳定性影响。
         this.tencentQuoteUrl = 'https://qt.gtimg.cn/q=';
+        this.tencentKlineUrl = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=';
         this.optionsDataBaseUrl = 'data/options';
         this.dataSource = 'tencent-cboe-cache';
         this.debug = true;
         this.pageCache = new Map();
         this.cacheTtlMs = 2 * 60 * 1000;
+        this.tencentKlineSuffixMap = {
+            BILI: 'OQ',
+            GOOG: 'OQ',
+            LMND: 'N',
+            PDD: 'OQ',
+            RKLB: 'OQ',
+            TEM: 'OQ',
+            CRCL: 'N',
+            DUOL: 'OQ',
+            TSLA: 'OQ',
+            OSCR: 'N',
+            HIMS: 'N',
+            HOOD: 'OQ',
+            CRWV: 'OQ',
+            SOFI: 'OQ',
+            AMD: 'OQ'
+        };
     }
 
     getDataSourceName() {
@@ -89,8 +107,93 @@ class APIService {
         if (!Number.isFinite(price) || price <= 0) {
             throw new Error(`无法解析${normalizedSymbol}的腾讯财经行情`);
         }
-
         return { price, change, changePct };
+    }
+
+    formatDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    getTencentKlineCodes(symbol) {
+        const normalizedSymbol = this.normalizeSymbol(symbol);
+        const preferredSuffix = this.tencentKlineSuffixMap[normalizedSymbol];
+        const suffixes = [preferredSuffix, 'OQ', 'N', 'A', 'P', '']
+            .filter((suffix, index, arr) => suffix !== undefined && arr.indexOf(suffix) === index);
+
+        return suffixes.map(suffix => `us${normalizedSymbol}${suffix ? `.${suffix}` : ''}`);
+    }
+
+    getTencentKlineRows(data, code) {
+        const rows = data?.data?.[code]?.day;
+        if (!Array.isArray(rows)) {
+            return [];
+        }
+
+        return rows.filter(row => {
+            const close = Number(row?.[2]);
+            return Array.isArray(row) && row[0] && Number.isFinite(close) && close > 0;
+        });
+    }
+
+    async getYearStartClose(symbol, year = new Date().getFullYear()) {
+        const normalizedSymbol = this.normalizeSymbol(symbol);
+        const startDate = `${year}-01-01`;
+        const endDate = this.formatDate(new Date());
+        let bestCandidate = null;
+
+        for (const code of this.getTencentKlineCodes(normalizedSymbol)) {
+            try {
+                const url = `${this.tencentKlineUrl}${code},day,${startDate},${endDate},260,qfq`;
+                const data = await this.fetchJson(url);
+                const rows = this.getTencentKlineRows(data, code);
+                if (rows.length === 0) {
+                    continue;
+                }
+
+                const firstRow = rows[0];
+                const candidate = {
+                    price: Number(firstRow[2]),
+                    date: firstRow[0],
+                    code,
+                    rowCount: rows.length
+                };
+
+                if (!bestCandidate || candidate.rowCount > bestCandidate.rowCount) {
+                    bestCandidate = candidate;
+                }
+
+                if (candidate.rowCount > 5 && candidate.date.startsWith(`${year}-01`)) {
+                    return candidate;
+                }
+            } catch (error) {
+                this.logDebug(`${normalizedSymbol}年初K线候选${code}不可用: ${error.message}`);
+            }
+        }
+
+        if (bestCandidate) {
+            return bestCandidate;
+        }
+
+        throw new Error(`${normalizedSymbol}没有可用年初K线`);
+    }
+
+    async getYearToDateChange(symbol, currentPrice) {
+        const normalizedSymbol = this.normalizeSymbol(symbol);
+        const price = Number(currentPrice);
+        if (!Number.isFinite(price) || price <= 0) {
+            throw new Error(`${normalizedSymbol}当前价格无效`);
+        }
+
+        const yearStart = await this.getYearStartClose(normalizedSymbol);
+        return {
+            percent: ((price - yearStart.price) / yearStart.price) * 100,
+            basePrice: yearStart.price,
+            baseDate: yearStart.date,
+            code: yearStart.code
+        };
     }
 
     getOptionsDataUrl(symbol) {

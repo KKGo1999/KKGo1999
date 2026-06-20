@@ -365,6 +365,26 @@ body {
     border-color: var(--table-border);
 }
 
+.stock-overview-scroll {
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.stock-overview-scroll #overviewTable {
+    min-width: 680px;
+}
+
+.stock-overview-scroll th,
+.stock-overview-scroll td {
+    white-space: nowrap;
+}
+
+.stock-overview-scroll th:first-child,
+.stock-overview-scroll td:first-child {
+    min-width: 210px;
+}
+
 /* 表头固定 */
 .table-responsive thead th {
     position: sticky;

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>期权分析</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260620-4">
+    <link rel="stylesheet" href="styles.css?v=20260620-5">
     <link rel="icon" type="image/png" href="/img/favicon.png">
     <link rel="apple-touch-icon" href="/img/favicon.png"/>
 </head>
@@ -39,13 +39,14 @@
                         <button id="refreshOverviewBtn" class="btn btn-sm btn-outline-primary">刷新</button>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
+                        <div class="table-responsive stock-overview-scroll">
                             <table id="overviewTable" class="table table-sm table-hover mb-0 sortable-table">
                                 <thead>
                                     <tr>
                                         <th class="sortable" data-sort="symbol">股票</th>
                                         <th class="sortable" data-sort="price">最新价格</th>
                                         <th class="sortable" data-sort="change">涨跌幅</th>
+                                        <th class="sortable" data-sort="ytdChange">年初至今</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -53,81 +54,91 @@
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/BILI.html" target="_blank" rel="noopener">哔哩哔哩 (BILI)</a></td>
                                     <td id="price-BILI">--</td>
                                     <td id="change-BILI">--</td>
+                                    <td id="ytd-BILI">--</td>
                                     </tr>
                                     <tr data-symbol="GOOG">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/GOOG.html" target="_blank" rel="noopener">谷歌 (GOOG)</a></td>
                                     <td id="price-GOOG">--</td>
                                     <td id="change-GOOG">--</td>
+                                    <td id="ytd-GOOG">--</td>
                                     </tr>
                                     <tr data-symbol="LMND">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/LMND.html" target="_blank" rel="noopener">柠檬水 (LMND)</a></td>
                                     <td id="price-LMND">--</td>
                                     <td id="change-LMND">--</td>
+                                    <td id="ytd-LMND">--</td>
                                     </tr>
                                     <tr data-symbol="PDD">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/PDD.html" target="_blank" rel="noopener">拼多多 (PDD)</a></td>
                                     <td id="price-PDD">--</td>
                                     <td id="change-PDD">--</td>
+                                    <td id="ytd-PDD">--</td>
                                     </tr>
                                     <tr data-symbol="RKLB">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/RKLB.html" target="_blank" rel="noopener">火箭实验室 (RKLB)</a></td>
                                     <td id="price-RKLB">--</td>
                                     <td id="change-RKLB">--</td>
+                                    <td id="ytd-RKLB">--</td>
                                     </tr>
                                     <tr data-symbol="TEM">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/TEM.html" target="_blank" rel="noopener">Tempus (TEM)</a></td>
                                     <td id="price-TEM">--</td>
                                     <td id="change-TEM">--</td>
+                                    <td id="ytd-TEM">--</td>
                                     </tr>
                                     <tr data-symbol="CRCL">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/CRCL.html" target="_blank" rel="noopener">CRCL (CRCL)</a></td>
                                     <td id="price-CRCL">--</td>
                                     <td id="change-CRCL">--</td>
+                                    <td id="ytd-CRCL">--</td>
                                     </tr>
                                     <tr data-symbol="DUOL">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/DUOL.html" target="_blank" rel="noopener">多邻国 (DUOL)</a></td>
                                     <td id="price-DUOL">--</td>
                                     <td id="change-DUOL">--</td>
+                                    <td id="ytd-DUOL">--</td>
                                     </tr>
                                     <tr data-symbol="TSLA">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/TSLA.html" target="_blank" rel="noopener">特斯拉 (TSLA)</a></td>
                                     <td id="price-TSLA">--</td>
                                     <td id="change-TSLA">--</td>
-                                    </tr>
-                                    <tr data-symbol="TSLL">
-                                        <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/TSLL.html" target="_blank" rel="noopener">特斯拉多头ETF (TSLL)</a></td>
-                                    <td id="price-TSLL">--</td>
-                                    <td id="change-TSLL">--</td>
+                                    <td id="ytd-TSLA">--</td>
                                     </tr>
                                     <tr data-symbol="OSCR">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/OSCR.html" target="_blank" rel="noopener">OSCAR Health (OSCR)</a></td>
                                     <td id="price-OSCR">--</td>
                                     <td id="change-OSCR">--</td>
+                                    <td id="ytd-OSCR">--</td>
                                     </tr>
                                     <tr data-symbol="HIMS">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/HIMS.html" target="_blank" rel="noopener">Hims &amp; Hers (HIMS)</a></td>
                                     <td id="price-HIMS">--</td>
                                     <td id="change-HIMS">--</td>
+                                    <td id="ytd-HIMS">--</td>
                                     </tr>
                                     <tr data-symbol="HOOD">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/HOOD.html" target="_blank" rel="noopener">Roobinhood (HOOD)</a></td>
                                     <td id="price-HOOD">--</td>
                                     <td id="change-HOOD">--</td>
+                                    <td id="ytd-HOOD">--</td>
                                     </tr>
                                     <tr data-symbol="CRWV">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/CRWV.html" target="_blank" rel="noopener">CRWV (CRWV)</a></td>
                                     <td id="price-CRWV">--</td>
                                     <td id="change-CRWV">--</td>
+                                    <td id="ytd-CRWV">--</td>
                                     </tr>
                                     <tr data-symbol="SOFI">
-                                        <td>SoFi Technologies (SOFI)</td>
+                                        <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/SOFI.html" target="_blank" rel="noopener">SoFi Technologies (SOFI)</a></td>
                                         <td id="price-SOFI">--</td>
                                         <td id="change-SOFI">--</td>
+                                        <td id="ytd-SOFI">--</td>
                                     </tr>
                                     <tr data-symbol="AMD">
                                         <td><a href="https://stock.finance.sina.com.cn/usstock/quotes/AMD.html" target="_blank" rel="noopener">AMD (AMD)</a></td>
                                     <td id="price-AMD">--</td>
                                     <td id="change-AMD">--</td>
+                                    <td id="ytd-AMD">--</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -164,7 +175,6 @@
                                         <option value="RKLB">火箭实验室 (RKLB)</option>
                                         <option value="TEM">Tempus (TEM)</option>
                                         <option value="TSLA">特斯拉 (TSLA)</option>
-                                        <option value="TSLL">特斯拉多头ETF (TSLL)</option>
                                     </datalist>
                                 </div>
                                 <div class="stock-info mt-3">
@@ -275,10 +285,10 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mathjs@11.8.0/lib/browser/math.min.js"></script>
-    <script src="apiService.js?v=20260619-3"></script>
+    <script src="apiService.js?v=20260620-1"></script>
     <script src="optionsCalculator.js?v=20260619-3"></script>
     <script src="optionStrategies.js?v=20260619-3"></script>
-    <script src="app.js?v=20260620-3"></script>
+    <script src="app.js?v=20260620-4"></script>
     <script src="advancedAnalysisFix.js?v=20260620-7"></script>
 </body>
 </html>

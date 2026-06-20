@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------------- 顶部股票价格概览 ----------------
-    const overviewSymbols = ['BILI','GOOG','LMND','PDD','RKLB','TEM','CRCL','DUOL','TSLA','TSLL','OSCR','HIMS','HOOD','CRWV','SOFI','AMD'];
+    const overviewSymbols = ['BILI','GOOG','LMND','PDD','RKLB','TEM','CRCL','DUOL','TSLA','OSCR','HIMS','HOOD','CRWV','SOFI','AMD'];
     async function updateStockPriceOverview() {
         for (const sym of overviewSymbols) {
             try {
@@ -303,12 +303,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await loadStockData(sym, false);
                 const priceCell = document.getElementById(`price-${sym}`);
                 const changeCell = document.getElementById(`change-${sym}`);
-                if (!priceCell || !changeCell) continue;
+                const ytdCell = document.getElementById(`ytd-${sym}`);
+                if (!priceCell || !changeCell || !ytdCell) continue;
                 priceCell.textContent = `$${data.price.toFixed(2)}`;
                 const changeSign = data.change >= 0 ? '+' : '';
                 const percent = (data.change / (data.price - data.change)) * 100;
                 changeCell.textContent = `${changeSign}${percent.toFixed(2)}% (${changeSign}${data.change.toFixed(2)})`;
                 changeCell.className = data.change >= 0 ? 'positive-change' : 'negative-change';
+                try {
+                    const ytd = await apiService.getYearToDateChange(sym, data.price);
+                    const ytdSign = ytd.percent >= 0 ? '+' : '';
+                    ytdCell.textContent = `${ytdSign}${ytd.percent.toFixed(2)}%`;
+                    ytdCell.className = ytd.percent >= 0 ? 'positive-change' : 'negative-change';
+                    ytdCell.title = `基准日 ${ytd.baseDate} 收盘价 $${ytd.basePrice.toFixed(2)}`;
+                } catch (ytdError) {
+                    console.error('更新年初至今涨跌失败:', sym, ytdError);
+                    ytdCell.textContent = '--';
+                    ytdCell.className = '';
+                    ytdCell.removeAttribute('title');
+                }
             } catch (e) {
                 console.error('更新股票概览失败:', sym, e);
             }
@@ -352,6 +365,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (column === 'change') {
                     valA = numFromText(document.getElementById(`change-${symA}`).textContent);
                     valB = numFromText(document.getElementById(`change-${symB}`).textContent);
+                } else if (column === 'ytdChange') {
+                    valA = numFromText(document.getElementById(`ytd-${symA}`).textContent);
+                    valB = numFromText(document.getElementById(`ytd-${symB}`).textContent);
                 }
 
                 if (valA < valB) return direction === 'asc' ? -1 : 1;
