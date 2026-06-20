@@ -131,9 +131,14 @@
         const minAvail = Math.min(...strikes);
         const maxAvail = Math.max(...strikes);
         const lowerRatio = optionType === 'call' ? 1.05 : 0.65;
-        const upperRatio = optionType === 'call' ? 1.35 : 0.9;
-        let recommendedMin = Math.min(Math.max(Math.ceil(lowerRatio * stockPrice), minAvail), maxAvail);
-        let recommendedMax = Math.max(Math.min(Math.floor(upperRatio * stockPrice), maxAvail), minAvail);
+        const upperRatio = optionType === 'call' ? 1.35 : 0.85;
+
+        const nearestStrike = target => strikes.reduce((closest, strike) => {
+            return Math.abs(strike - target) < Math.abs(closest - target) ? strike : closest;
+        }, strikes[0]);
+
+        let recommendedMin = nearestStrike(Math.min(Math.max(lowerRatio * stockPrice, minAvail), maxAvail));
+        let recommendedMax = nearestStrike(Math.min(Math.max(upperRatio * stockPrice, minAvail), maxAvail));
 
         if (recommendedMin > recommendedMax) {
             [recommendedMin, recommendedMax] = [recommendedMax, recommendedMin];

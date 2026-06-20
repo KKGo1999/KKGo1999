@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearCandidates = document.getElementById('clearCandidates');
     const filterByStrikePercentage = document.getElementById('filterByStrikePercentage');
     const filterBySellerReturn = document.getElementById('filterBySellerReturn');
-    const freeDataSourceButton = document.getElementById('freeDataSourceButton');
     const refreshOverviewBtn = document.getElementById('refreshOverviewBtn');
     const advancedAnalysisBtn = document.getElementById('advancedAnalysisBtn');
     
@@ -69,9 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // 初始化主题切换
         initThemeSwitch();
 
-        // 创建数据源指示器
-        createDataSourceIndicators();
-        
         if (candidatesList) {
             loadCandidatesFromStorage();
         }
@@ -202,24 +198,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     filterBySellerReturn.value = savedReturnFilterState;
                 }
             }
-            
-            // 显示数据源指示器
-            if (!document.getElementById('dataSourceIndicator')) {
-                const dataSourceContainer = document.createElement('div');
-                dataSourceContainer.id = 'dataSourceIndicator';
-                dataSourceContainer.className = 'data-source-indicator text-center mb-2';
-                document.querySelector('.options-container').prepend(dataSourceContainer);
-            }
-            
-            // 免费数据源无需 API Key，按钮仅用于提示当前数据来源
-            if (freeDataSourceButton) {
-                freeDataSourceButton.addEventListener('click', () => {
-                    alert(`当前使用${apiService.getDataSourceName()}，无需配置 API Key。`);
-                });
-            }
-            
-            // 初始化数据源指示器
-            updateDataSourceIndicator(true);
             
         } catch (error) {
             console.error('初始化错误:', error);
@@ -837,42 +815,17 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 数据源指示器
     function createDataSourceIndicators() {
-        // 创建数据源指示器元素
-        const mainDataSourceIndicator = document.createElement('div');
-        mainDataSourceIndicator.id = 'dataSourceIndicator';
-        mainDataSourceIndicator.className = 'data-source-indicator';
-        
-        const optionsContainer = document.querySelector('.options-container');
-        if (optionsContainer) {
-            optionsContainer.prepend(mainDataSourceIndicator);
-        } else {
-            console.warn('未找到期权容器 (.options-container)');
-        }
+        return null;
     }
     
     // 更新数据源指示器
     function updateDataSourceIndicator(isRealData) {
-        const indicator = document.getElementById('dataSourceIndicator');
-        
-        const currentSource = apiService.getDataSourceName();
-        
-        if (indicator) {
-            indicator.innerHTML = `
-                <div class="alert alert-${isRealData ? 'info' : 'warning'} py-1 small mb-2">
-                    <i class="bi ${isRealData ? 'bi-cloud-download' : 'bi-exclamation-triangle'}"></i>
-                    ${isRealData ? `使用${currentSource}市场数据` : '数据获取失败，请检查网络连接或免费数据源可用性'}
-                </div>
-            `;
-            
-            // 5秒后淡出
-            setTimeout(() => {
-                indicator.style.transition = 'opacity 1s';
-                indicator.style.opacity = '0';
-            }, 5000);
+        if (!isRealData) {
+            showMessage('数据获取失败，请检查网络连接或数据源可用性', true);
         }
     }
     
-    // 免费数据源不需要 API Key。保留这个函数名以兼容旧代码路径。
+    // 当前数据源不需要 API Key。保留这个函数名以兼容旧代码路径。
     function configureApiKey() {
         alert(`当前使用${apiService.getDataSourceName()}，无需配置 API Key。`);
     }
