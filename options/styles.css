@@ -395,6 +395,65 @@ body {
     color: var(--advanced-muted);
 }
 
+.ai-history-panel {
+    margin-top: 1rem;
+    padding: 0.85rem;
+    border: 1px solid var(--advanced-border);
+    border-radius: 8px;
+    background: var(--advanced-surface-alt);
+}
+
+.ai-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.ai-history-content {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.ai-history-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.75rem;
+    border: 1px solid var(--advanced-border);
+    border-radius: 8px;
+    background: var(--card-bg);
+}
+
+.ai-history-item-active {
+    border-color: var(--advanced-primary);
+}
+
+.ai-history-main {
+    min-width: 0;
+}
+
+.ai-history-title {
+    color: var(--text-color);
+    font-weight: 700;
+}
+
+.ai-history-meta {
+    margin-top: 0.15rem;
+    color: var(--advanced-muted);
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ai-history-actions {
+    display: flex;
+    gap: 0.45rem;
+}
+
 .glm-stream-block {
     margin-bottom: 1rem;
     padding: 0.85rem;
@@ -1297,6 +1356,16 @@ input:checked + .slider:before {
 
     .glm-stream-grid {
         grid-template-columns: 1fr;
+    }
+
+    .ai-history-header,
+    .ai-history-item {
+        align-items: stretch;
+        grid-template-columns: 1fr;
+    }
+
+    .ai-history-actions {
+        justify-content: flex-end;
     }
 
     .ai-progress-track {

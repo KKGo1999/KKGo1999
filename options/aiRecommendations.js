@@ -1,8 +1,11 @@
 (function() {
     const STORAGE_KEY = 'kkgo1999.glmCodingPlanKey';
     const SESSION_KEY = 'kkgo1999.glmCodingPlanSessionKey';
+    const HISTORY_KEY = 'kkgo1999.aiAnalysisHistory';
     const GLM_BASE_URL = 'https://open.bigmodel.cn/api/coding/paas/v4';
     const DEFAULT_GLM_MODEL = 'glm-5.2';
+    const MAX_HISTORY_ITEMS = 50;
+    const MAX_HISTORY_TEXT_LENGTH = 60000;
     const DEFAULT_CANDIDATE_SORT = { column: 'rank', direction: 'asc' };
     const CANDIDATE_SORT_COLUMNS = new Set([
         'rank',
@@ -679,6 +682,233 @@
         ].join('');
     }
 
+    function roundHistoryNumber(value, digits = 2) {
+        const number = Number(value);
+        return Number.isFinite(number) ? Number(number.toFixed(digits)) : 0;
+    }
+
+    function trimHistoryText(value) {
+        const text = String(value || '');
+        if (text.length <= MAX_HISTORY_TEXT_LENGTH) return text;
+        return `${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}\n\n...已截断，完整内容过长未全部保存...`;
+    }
+
+    function serializeHistoryCandidate(candidate) {
+        return {
+            id: candidate.id,
+            symbol: candidate.symbol,
+            strategy: candidate.strategy,
+            optionType: candidate.optionType,
+            expiryDate: candidate.expiryDate,
+            daysToExpiry: candidate.daysToExpiry,
+            strike: roundHistoryNumber(candidate.strike),
+            stockPrice: roundHistoryNumber(candidate.stockPrice),
+            strikePct: roundHistoryNumber(candidate.strikePct),
+            bid: roundHistoryNumber(candidate.bid),
+            ask: roundHistoryNumber(candidate.ask),
+            spreadPct: roundHistoryNumber(candidate.spreadPct, 1),
+            openInterest: Number(candidate.openInterest) || 0,
+            volume: Number(candidate.volume) || 0,
+            annualReturn: roundHistoryNumber(candidate.annualReturn),
+            collateral: roundHistoryNumber(candidate.collateral, 0),
+            breakEven: roundHistoryNumber(candidate.breakEven),
+            downsideProtectionPct: roundHistoryNumber(candidate.downsideProtectionPct),
+            localScore: roundHistoryNumber(candidate.localScore)
+        };
+    }
+
+    function serializeHistoryRows(rows) {
+        return rows.map(row => ({
+            rank: Number(row.rank) || 0,
+            candidate: serializeHistoryCandidate(row.candidate),
+            reason: row.reason || '',
+            risk: row.risk || '',
+            confidence: row.confidence || '中'
+        }));
+    }
+
+    function serializeHistorySettings(settings) {
+        return {
+            strategyType: settings.strategyType,
+            riskProfile: settings.riskProfile,
+            minDays: settings.minDays,
+            maxDays: settings.maxDays,
+            minBid: settings.minBid,
+            minAnnualReturn: settings.minAnnualReturn,
+            minStrikePct: settings.minStrikePct,
+            maxStrikePct: settings.maxStrikePct,
+            minOpenInterest: settings.minOpenInterest,
+            maxSpreadPct: settings.maxSpreadPct,
+            candidateLimit: settings.candidateLimit,
+            perSymbolLimit: settings.perSymbolLimit
+        };
+    }
+
+    function getAiHistory() {
+        try {
+            const raw = localStorage.getItem(HISTORY_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            localStorage.removeItem(HISTORY_KEY);
+            return [];
+        }
+    }
+
+    function setAiHistory(history) {
+        const trimmedHistory = history.slice(0, MAX_HISTORY_ITEMS);
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmedHistory));
+        updateHistoryButtonCount(trimmedHistory.length);
+    }
+
+    function formatHistoryTime(value) {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '--';
+        return new Intl.DateTimeFormat('zh-CN', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).format(date);
+    }
+
+    function formatHistorySettings(settings = {}) {
+        const type = settings.strategyType === 'both'
+            ? 'Put + Call'
+            : getStrategyLabel(settings.strategyType);
+        return [
+            type,
+            `${settings.minDays || '--'}-${settings.maxDays || '--'}天`,
+            `买价 >= ${formatMoney(Number(settings.minBid) || 0)}`,
+            `年化 >= ${formatPct(Number(settings.minAnnualReturn) || 0, 0)}`,
+            `相对差 ${formatPct(Number(settings.minStrikePct) || 0, 0)} 至 ${formatPct(Number(settings.maxStrikePct) || 0, 0)}`,
+            `单股 <= ${settings.perSymbolLimit || '--'}个`
+        ].join(' / ');
+    }
+
+    function updateHistoryButtonCount(count = getAiHistory().length) {
+        const button = $('toggleAiHistory');
+        if (button) button.textContent = count > 0 ? `历史记录 (${count})` : '历史记录';
+    }
+
+    function renderHistoryPanel(selectedId = '') {
+        const content = $('aiHistoryContent');
+        if (!content) return;
+
+        const history = getAiHistory();
+        updateHistoryButtonCount(history.length);
+        if (history.length === 0) {
+            content.innerHTML = '<div class="ai-empty-state">暂无历史记录。</div>';
+            return;
+        }
+
+        content.innerHTML = history.map((entry, index) => {
+            const activeClass = entry.id === selectedId ? ' ai-history-item-active' : '';
+            const symbols = Array.from(new Set((entry.rows || []).map(row => row.candidate?.symbol).filter(Boolean))).slice(0, 6).join(', ');
+            return [
+                `<article class="ai-history-item${activeClass}">`,
+                '<div class="ai-history-main">',
+                `<div class="ai-history-title">版本 ${history.length - index} · ${escapeHtml(formatHistoryTime(entry.createdAt))}</div>`,
+                `<div class="ai-history-meta">${escapeHtml(symbols || '无股票')} · ${(entry.rows || []).length} 个推荐</div>`,
+                `<div class="ai-history-meta">${escapeHtml(formatHistorySettings(entry.settings))}</div>`,
+                '</div>',
+                '<div class="ai-history-actions">',
+                `<button class="btn btn-sm btn-outline-primary" data-history-view="${escapeHtml(entry.id)}">查看</button>`,
+                `<button class="btn btn-sm btn-outline-danger" data-history-delete="${escapeHtml(entry.id)}">删除</button>`,
+                '</div>',
+                '</article>'
+            ].join('');
+        }).join('');
+    }
+
+    function saveAiHistoryEntry(aiResult, localScan, settings, streamCapture) {
+        const rows = serializeHistoryRows(normalizeAiRows(aiResult, localScan));
+        const entry = {
+            id: window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            createdAt: new Date().toISOString(),
+            summary: aiResult?.summary || '智谱已返回 Top 10 推荐。',
+            notes: Array.isArray(aiResult?.notes) ? aiResult.notes.slice(0, 3) : [],
+            settings: serializeHistorySettings(settings),
+            streamCapture: {
+                status: '历史记录',
+                reasoning: trimHistoryText(streamCapture?.reasoning || ''),
+                content: trimHistoryText(streamCapture?.content || '')
+            },
+            rows
+        };
+
+        const history = getAiHistory();
+        try {
+            setAiHistory([entry, ...history]);
+        } catch (error) {
+            entry.streamCapture = {
+                status: '历史记录',
+                reasoning: '',
+                content: '流式文本过长，历史记录仅保存推荐表格。'
+            };
+            try {
+                setAiHistory([entry, ...history]);
+            } catch (fallbackError) {
+                console.warn('保存 AI 分析历史失败', fallbackError);
+                return null;
+            }
+        }
+        renderHistoryPanel(entry.id);
+        return entry;
+    }
+
+    function renderHistoryResult(entry) {
+        const notes = Array.isArray(entry.notes) ? entry.notes.slice(0, 3) : [];
+        const notesHtml = notes.length
+            ? `<ul class="ai-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join('')}</ul>`
+            : '';
+
+        setStatus('历史记录');
+        setProgress(100, `已加载历史版本 ${formatHistoryTime(entry.createdAt)}`);
+        setOutput([
+            '<div class="ai-summary-block">',
+            `<strong>历史版本 · ${escapeHtml(formatHistoryTime(entry.createdAt))}</strong>`,
+            `<p>${escapeHtml(entry.summary || '')}</p>`,
+            `<p>${escapeHtml(formatHistorySettings(entry.settings))}</p>`,
+            notesHtml,
+            '</div>',
+            renderGlmStreamBlock(entry.streamCapture),
+            renderRows(entry.rows || [])
+        ].join(''));
+    }
+
+    function viewHistoryEntry(id) {
+        const entry = getAiHistory().find(item => item.id === id);
+        if (!entry) return;
+
+        const panel = $('aiHistoryPanel');
+        if (panel) panel.hidden = false;
+        renderHistoryPanel(id);
+        renderHistoryResult(entry);
+    }
+
+    function deleteHistoryEntry(id) {
+        const history = getAiHistory().filter(item => item.id !== id);
+        setAiHistory(history);
+        renderHistoryPanel();
+    }
+
+    function clearAiHistory() {
+        if (!window.confirm('确认清空所有 AI分析历史记录？')) return;
+        localStorage.removeItem(HISTORY_KEY);
+        updateHistoryButtonCount(0);
+        renderHistoryPanel();
+    }
+
+    function toggleHistoryPanel() {
+        const panel = $('aiHistoryPanel');
+        if (!panel) return;
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) renderHistoryPanel();
+    }
+
     function getCandidateDefaultSortDirection(column) {
         if (['symbol', 'expiryDate', 'strike', 'spreadPct', 'collateral', 'breakEven', 'rank'].includes(column)) {
             return 'asc';
@@ -965,6 +1195,7 @@
                 });
                 if (runId !== activeRunId) return;
                 aiResult = glmResponse.aiResult;
+                saveAiHistoryEntry(aiResult, localScan, settings, glmResponse.streamCapture);
                 setStatus('完成');
                 setProgress(100, 'AI 推荐已生成');
                 renderResult(aiResult, localScan, '', glmResponse.streamCapture);
@@ -1029,6 +1260,32 @@
             runButton.addEventListener('click', runRecommendation);
         }
 
+        const historyButton = $('toggleAiHistory');
+        if (historyButton) {
+            historyButton.addEventListener('click', toggleHistoryPanel);
+        }
+
+        const clearHistoryButton = $('clearAiHistory');
+        if (clearHistoryButton) {
+            clearHistoryButton.addEventListener('click', clearAiHistory);
+        }
+
+        const historyContent = $('aiHistoryContent');
+        if (historyContent) {
+            historyContent.addEventListener('click', event => {
+                const viewButton = event.target.closest('[data-history-view]');
+                if (viewButton) {
+                    viewHistoryEntry(viewButton.getAttribute('data-history-view'));
+                    return;
+                }
+
+                const deleteButton = event.target.closest('[data-history-delete]');
+                if (deleteButton) {
+                    deleteHistoryEntry(deleteButton.getAttribute('data-history-delete'));
+                }
+            });
+        }
+
         const rememberInput = $('rememberGlmKey');
         if (rememberInput) {
             rememberInput.addEventListener('change', () => persistKey(getSettings()));
@@ -1057,6 +1314,7 @@
     function init() {
         restoreKey();
         bindEvents();
+        updateHistoryButtonCount();
     }
 
     window.aiRecommendations = {

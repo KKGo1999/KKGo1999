@@ -223,6 +223,7 @@
                 <div class="ai-actions-row">
                     <button id="scanAiCandidates" class="btn btn-outline-primary btn-sm">扫描候选</button>
                     <button id="runAiRecommendation" class="btn btn-primary btn-sm">AI分析 Top 10</button>
+                    <button id="toggleAiHistory" class="btn btn-outline-secondary btn-sm">历史记录</button>
                 </div>
 
                 <div class="ai-config-note">扫描结果会按本地评分限制每只股票的候选数；单股上限由“单股最多候选”控制，AI分析发送数量由“AI分析数量”控制。</div>
@@ -232,6 +233,16 @@
                     <div id="aiRecommendationProgressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
                 </div>
                 <div id="aiRecommendationProgressText">等待开始</div>
+                </div>
+
+                <div id="aiHistoryPanel" class="ai-history-panel" hidden>
+                    <div class="ai-history-header">
+                        <strong>AI分析历史</strong>
+                        <button id="clearAiHistory" class="btn btn-outline-danger btn-sm">清空历史</button>
+                    </div>
+                    <div id="aiHistoryContent" class="ai-history-content">
+                        <div class="ai-empty-state">暂无历史记录。</div>
+                    </div>
                 </div>
 
                 <div id="aiRecommendationOutput" class="ai-recommendation-output">
@@ -381,6 +392,6 @@
     <script src="optionStrategies.js?v=20260619-3"></script>
     <script src="app.js?v=20260620-4"></script>
     <script src="advancedAnalysisFix.js?v=20260620-7"></script>
-    <script src="aiRecommendations.js?v=20260622-7"></script>
+    <script src="aiRecommendations.js?v=20260622-8"></script>
 </body>
 </html>
