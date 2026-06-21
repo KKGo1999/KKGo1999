@@ -113,6 +113,37 @@ body {
     min-width: 0;
 }
 
+.page-header-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.9rem;
+    margin-left: auto;
+    min-width: 0;
+}
+
+.header-api-key {
+    display: grid;
+    grid-template-columns: auto minmax(220px, 320px) auto;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.header-api-key > label {
+    margin: 0;
+    color: var(--advanced-muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.header-save-key {
+    margin: 0;
+    color: var(--advanced-muted);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
 @media (max-width: 480px) {
     .page-title {
         font-size: 1.45rem;
@@ -236,6 +267,258 @@ body {
     font-size: 0.82rem;
     text-align: center;
     border-top: 1px solid var(--table-border);
+}
+
+.ai-recommendation-panel {
+    margin-bottom: 1.75rem;
+}
+
+.ai-recommendation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.ai-recommendation-header h2 {
+    margin: 0.15rem 0 0.25rem;
+    color: var(--card-header-color);
+    font-size: 1.05rem;
+    line-height: 1.25;
+}
+
+.ai-recommendation-header p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.92rem;
+}
+
+.ai-config-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(110px, 1fr));
+    gap: 0.75rem;
+    align-items: end;
+}
+
+.ai-field {
+    min-width: 0;
+}
+
+.ai-field label {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--advanced-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.ai-field-wide {
+    grid-row: span 2;
+}
+
+.ai-save-key {
+    margin-top: 0.4rem;
+    color: var(--advanced-muted);
+    font-size: 0.82rem;
+}
+
+.ai-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-top: 0.75rem;
+}
+
+.ai-actions-row .btn {
+    min-width: 150px;
+    white-space: nowrap;
+}
+
+.ai-config-note {
+    margin-top: 0.75rem;
+    color: var(--advanced-muted);
+    font-size: 0.82rem;
+}
+
+.ai-progress-track {
+    display: grid;
+    grid-template-columns: minmax(140px, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 0.9rem;
+    color: var(--advanced-muted);
+    font-size: 0.85rem;
+}
+
+.ai-progress-track .progress {
+    height: 8px;
+    background: var(--advanced-surface-alt);
+}
+
+.ai-recommendation-output {
+    margin-top: 1rem;
+}
+
+.ai-empty-state {
+    padding: 1rem;
+    border: 1px dashed var(--advanced-border);
+    border-radius: 8px;
+    color: var(--advanced-muted);
+    background: var(--advanced-surface-alt);
+}
+
+.ai-empty-state-error {
+    color: var(--negative-color);
+}
+
+.ai-warning {
+    margin-bottom: 0.75rem;
+}
+
+.ai-summary-block {
+    margin-bottom: 0.85rem;
+    padding: 0.85rem;
+    border: 1px solid var(--advanced-border);
+    border-radius: 8px;
+    background: var(--advanced-surface-alt);
+}
+
+.ai-summary-block p {
+    margin: 0.25rem 0 0;
+    color: var(--text-color);
+}
+
+.ai-notes {
+    margin: 0.5rem 0 0;
+    padding-left: 1.1rem;
+    color: var(--advanced-muted);
+}
+
+.glm-stream-block {
+    margin-bottom: 1rem;
+    padding: 0.85rem;
+    border: 1px solid var(--advanced-border);
+    border-radius: 8px;
+    background: var(--advanced-surface-alt);
+}
+
+.glm-stream-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-color);
+}
+
+.glm-stream-header span {
+    color: var(--advanced-muted);
+    font-size: 0.82rem;
+}
+
+.glm-stream-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.glm-stream-panel {
+    min-width: 0;
+}
+
+.glm-stream-panel h3 {
+    margin: 0 0 0.35rem;
+    color: var(--advanced-muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.glm-stream-panel pre {
+    min-height: 150px;
+    max-height: 260px;
+    margin: 0;
+    padding: 0.7rem;
+    overflow: auto;
+    color: var(--text-color);
+    background: var(--card-bg);
+    border: 1px solid var(--advanced-border);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.ai-results-table-wrap {
+    overflow: auto;
+    border: 1px solid var(--advanced-border);
+    border-radius: 8px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.ai-results-table {
+    min-width: 1100px;
+}
+
+.ai-candidate-table {
+    min-width: 1320px;
+}
+
+.ai-results-table th,
+.ai-results-table td {
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.ai-results-table:not(.ai-candidate-table) td:nth-child(9),
+.ai-results-table:not(.ai-candidate-table) td:nth-child(10) {
+    min-width: 220px;
+    white-space: normal;
+}
+
+.ai-subtext {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--advanced-muted);
+    font-size: 0.75rem;
+    font-weight: 400;
+}
+
+.ai-mobile-results {
+    display: none;
+}
+
+.ai-recommendation-card {
+    padding: 0.85rem;
+    border: 1px solid var(--advanced-border);
+    border-radius: 8px;
+    background: var(--advanced-surface-alt);
+}
+
+.ai-recommendation-card + .ai-recommendation-card {
+    margin-top: 0.75rem;
+}
+
+.ai-card-rank {
+    color: var(--text-color);
+    font-weight: 700;
+}
+
+.ai-card-main {
+    margin-top: 0.25rem;
+    color: var(--positive-color);
+    font-weight: 700;
+}
+
+.ai-card-meta,
+.ai-risk-text {
+    color: var(--advanced-muted);
+    font-size: 0.84rem;
+}
+
+.ai-recommendation-card p {
+    margin: 0.45rem 0 0;
 }
 
 .positive-change {
@@ -395,7 +678,7 @@ body {
 }
 
 .stock-overview-scroll #overviewTable {
-    min-width: 680px;
+    min-width: 540px;
 }
 
 .stock-overview-scroll th,
@@ -405,7 +688,8 @@ body {
 
 .stock-overview-scroll th:first-child,
 .stock-overview-scroll td:first-child {
-    min-width: 210px;
+    width: 72px;
+    min-width: 72px;
 }
 
 /* 表头固定 */
@@ -876,6 +1160,30 @@ input:checked + .slider:before {
 }
 
 @media (max-width: 992px) {
+    .page-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .page-header-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .header-api-key {
+        flex: 1 1 auto;
+        grid-template-columns: auto minmax(180px, 1fr) auto;
+    }
+
+    .ai-config-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .ai-field-wide {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+
     .advanced-summary-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -951,6 +1259,56 @@ input:checked + .slider:before {
         width: 100%;
         flex-wrap: wrap;
         gap: 0.5rem;
+    }
+
+    .page-header-controls {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .header-api-key {
+        grid-template-columns: 1fr;
+        width: 100%;
+    }
+
+    .theme-switch-wrapper {
+        align-self: flex-end;
+    }
+
+    .ai-recommendation-panel {
+        margin-bottom: 1.25rem;
+    }
+
+    .ai-recommendation-header {
+        flex-direction: column;
+    }
+
+    .ai-config-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ai-actions-row {
+        flex-direction: column;
+    }
+
+    .ai-actions-row .btn {
+        width: 100%;
+    }
+
+    .glm-stream-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ai-progress-track {
+        grid-template-columns: 1fr;
+    }
+
+    .ai-results-table-wrap {
+        display: none;
+    }
+
+    .ai-mobile-results {
+        display: block;
     }
 
     .advanced-workbench {
