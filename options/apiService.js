@@ -21,6 +21,7 @@ class APIService {
             CRCL: 'N',
             DUOL: 'OQ',
             TSLA: 'OQ',
+            TSLL: 'OQ',
             OSCR: 'N',
             HIMS: 'N',
             HOOD: 'OQ',
