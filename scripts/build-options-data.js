@@ -19,6 +19,7 @@ const SYMBOLS = [
     'PDD',
     'RKLB',
     'SOFI',
+    'SPCX',
     'TEM',
     'TSLA',
     'TSLL'

@@ -17,6 +17,7 @@ class APIService {
             LMND: 'N',
             PDD: 'OQ',
             RKLB: 'OQ',
+            SPCX: 'OQ',
             TEM: 'OQ',
             CRCL: 'N',
             DUOL: 'OQ',
