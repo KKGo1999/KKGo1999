@@ -3,7 +3,7 @@
     const SESSION_KEY = 'kkgo1999.glmCodingPlanSessionKey';
     const HISTORY_KEY = 'kkgo1999.aiAnalysisHistory';
     const GLM_BASE_URL = 'https://open.bigmodel.cn/api/coding/paas/v4';
-    const DEFAULT_GLM_MODEL = 'glm-5.2';
+    const DEFAULT_GLM_MODEL = 'glm-5.3';
     const MAX_HISTORY_ITEMS = 50;
     const MAX_HISTORY_TEXT_LENGTH = 60000;
     const DEFAULT_CANDIDATE_SORT = { column: 'rank', direction: 'asc' };
