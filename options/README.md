@@ -17,6 +17,24 @@
 
 ## 设置指南
 
+### Agent 数据入口
+
+从项目根目录执行：
+
+```sh
+node --test scripts/test-options-agent.js
+node scripts/build-options-data.js
+python3 -m http.server 8766 --bind 127.0.0.1
+```
+
+访问 http://127.0.0.1:8766/options/agent/ 可读取无需 JavaScript 的股票、默认候选和期权分页；主页面底部也提供入口。构建需要 Node.js 24+ 及腾讯、Cboe 的网络访问。
+
+股票清单、默认参数和筛选评分共用 options/analysisCore.js。只需修改其中 WATCHLIST / SUPPORTED_SYMBOLS，再重新构建；页面概览、扫描和 Agent 目录会使用同一清单。
+
+构建会生成 options/data/ 和 options/agent/ 下的 index.html、stocks/，这些行情产物不提交 Git，GitHub Actions 测试通过后重新生成并随站点部署。个别股票失败会保留失败记录；全部期权获取失败则阻止本次发布。
+
+主页面扫描后可“复制分析数据”或“下载 JSON”。导出保存扫描时的条件及结果，不包含 API Key、AI History；公开默认候选不会随着本机输入框的修改而变化。字段、公式、时间口径和分页规则见 [Agent 数据说明](agent/fields.md)。
+
 ### 1. 免费数据源
 
 应用默认从腾讯财经免费公开接口抓取美股报价，并在 GitHub Pages 部署时从 Cboe 延迟行情生成期权链静态 JSON，不需要 Tradier 账户或 API Key。浏览器读取同源缓存文件，避免直接请求第三方期权接口时遇到 CORS 或代理连接失败。

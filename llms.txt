@@ -1,0 +1,9 @@
+# KKGo1999
+
+> Personal website with a stock and options analysis workspace.
+
+## Options
+
+- [Options data guide](https://www.kkgo1999.top/options/agent/llms.txt): Entry points, data scope, units, and reading rules.
+- [Readable stock and options directory](https://www.kkgo1999.top/options/agent/): Static stock tables and paginated option chains.
+- [Fields and formulas](https://www.kkgo1999.top/options/agent/fields.md): Data interpretation and calculation methodology.

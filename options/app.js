@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // 实例化服务
     const apiService = new APIService();
+    const overviewSymbols = window.OptionsAnalysis.WATCHLIST;
     const optionsCalculator = new OptionsCalculator();
     const optionStrategies = new OptionStrategies(optionsCalculator);
     
@@ -295,7 +296,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------------- 顶部股票价格概览 ----------------
-    const overviewSymbols = ['BILI','GOOG','LMND','PDD','RKLB','SPCX','TEM','CRCL','DUOL','TSLA','TSLL','OSCR','HIMS','HOOD','CRWV','SOFI','AMD'];
     async function updateStockPriceOverview() {
         for (const sym of overviewSymbols) {
             try {
@@ -337,6 +337,32 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('overviewTable not found');
             return;
         }
+
+        const tbody = overviewTable.tBodies[0];
+        tbody.replaceChildren(...overviewSymbols.map(symbol => {
+            const row = document.createElement('tr');
+            row.dataset.symbol = symbol;
+            const cell = row.insertCell();
+            const link = document.createElement('a');
+            link.href = 'https://stock.finance.sina.com.cn/usstock/quotes/' + symbol + '.html';
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = symbol;
+            cell.appendChild(link);
+            for (const prefix of ['price', 'change', 'ytd']) {
+                const value = row.insertCell();
+                value.id = prefix + '-' + symbol;
+                value.textContent = '--';
+            }
+            return row;
+        }));
+        document.getElementById('stockOptions')?.replaceChildren(
+            ...window.OptionsAnalysis.SUPPORTED_SYMBOLS.map(symbol => {
+                const option = document.createElement('option');
+                option.value = symbol;
+                return option;
+            })
+        );
 
         const headers = overviewTable.querySelectorAll('th.sortable');
         const overviewSortConfig = { column: null, direction: 'asc' };

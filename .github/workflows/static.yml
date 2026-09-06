@@ -40,7 +40,9 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-      - name: Build delayed options data
+      - name: Test options data and Agent exports
+        run: node --test scripts/test-options-agent.js
+      - name: Build delayed options data and Agent pages
         run: node scripts/build-options-data.js
       - name: Setup Pages
         uses: actions/configure-pages@v6

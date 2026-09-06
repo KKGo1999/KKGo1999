@@ -64,7 +64,9 @@ class APIService {
         }
 
         this.logDebug(`请求URL: ${url}`);
-        const response = await fetch(url, { headers: { 'Accept': 'text/plain,*/*' } });
+        const response = await fetch(url, {
+            headers: { 'Accept': 'text/plain,*/*' }, signal: AbortSignal.timeout(15000)
+        });
         if (!response.ok) {
             throw new Error(`HTTP错误: ${response.status}`);
         }
@@ -81,7 +83,9 @@ class APIService {
         }
 
         this.logDebug(`请求URL: ${url}`);
-        const response = await fetch(url, { headers: { 'Accept': 'application/json,*/*' } });
+        const response = await fetch(url, {
+            headers: { 'Accept': 'application/json,*/*' }, signal: AbortSignal.timeout(15000)
+        });
         if (!response.ok) {
             throw new Error(`HTTP错误: ${response.status}`);
         }
@@ -109,7 +113,12 @@ class APIService {
         if (!Number.isFinite(price) || price <= 0) {
             throw new Error(`无法解析${normalizedSymbol}的腾讯财经行情`);
         }
-        return { price, change, changePct };
+        return {
+            price, change, changePct, currency: 'USD',
+            source: 'Tencent Finance', sourceUrl: url,
+            sourceTimestamp: fields[30] || null, sourceTimeZone: null,
+            retrievedAt: new Date(this.pageCache.get(url)?.timestamp || Date.now()).toISOString()
+        };
     }
 
     formatDate(date) {
@@ -301,4 +310,5 @@ class APIService {
 const apiService = new APIService();
 
 // 在控制台公开API服务，方便调试
-window.apiService = apiService;
+if (typeof window !== 'undefined') window.apiService = apiService;
+if (typeof module === 'object' && module.exports) module.exports = APIService;

@@ -1,4 +1,5 @@
 (function() {
+    const analysis = window.OptionsAnalysis;
     const STORAGE_KEY = 'kkgo1999.glmCodingPlanKey';
     const SESSION_KEY = 'kkgo1999.glmCodingPlanSessionKey';
     const HISTORY_KEY = 'kkgo1999.aiAnalysisHistory';
@@ -7,6 +8,14 @@
     const MAX_HISTORY_ITEMS = 50;
     const MAX_HISTORY_TEXT_LENGTH = 60000;
     const DEFAULT_CANDIDATE_SORT = { column: 'rank', direction: 'asc' };
+    const SETTING_INPUTS = {
+        strategyType: 'aiStrategyType', riskProfile: 'aiRiskProfile',
+        minDays: 'aiMinDays', maxDays: 'aiMaxDays', minBid: 'aiMinBid',
+        minAnnualReturn: 'aiMinAnnualReturn', minStrikePct: 'aiMinStrikePct',
+        maxStrikePct: 'aiMaxStrikePct', minOpenInterest: 'aiMinOpenInterest',
+        maxSpreadPct: 'aiMaxSpread', candidateLimit: 'aiCandidateLimit',
+        perSymbolLimit: 'aiPerSymbolLimit'
+    };
     const CANDIDATE_SORT_COLUMNS = new Set([
         'rank',
         'localScore',
@@ -41,11 +50,6 @@
             .replace(/'/g, '&#039;');
     }
 
-    function toNumber(value, fallback) {
-        const num = Number(value);
-        return Number.isFinite(num) ? num : fallback;
-    }
-
     function clamp(value, min, max) {
         return Math.min(max, Math.max(min, value));
     }
@@ -66,44 +70,16 @@
         return Number.isNaN(date.getTime()) ? null : date;
     }
 
-    function daysToExpiry(dateStr) {
-        const expiry = parseDate(dateStr);
-        if (!expiry) return null;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-    }
-
     function getOverviewSymbols() {
-        return Array.from(document.querySelectorAll('#overviewTable tbody tr[data-symbol]'))
-            .map(row => row.getAttribute('data-symbol'))
-            .filter(Boolean)
-            .filter((symbol, index, arr) => arr.indexOf(symbol) === index);
+        return [...analysis.WATCHLIST];
     }
 
     function getSettings() {
-        const minDays = clamp(toNumber($('aiMinDays')?.value, 30), 1, 730);
-        const maxDays = clamp(toNumber($('aiMaxDays')?.value, 200), minDays, 730);
-        const rawMinStrikePct = clamp(toNumber($('aiMinStrikePct')?.value, -60), -100, 300);
-        const rawMaxStrikePct = clamp(toNumber($('aiMaxStrikePct')?.value, -15), -100, 300);
-        const minStrikePct = Math.min(rawMinStrikePct, rawMaxStrikePct);
-        const maxStrikePct = Math.max(rawMinStrikePct, rawMaxStrikePct);
         return {
+            ...analysis.normalizeSettings(Object.fromEntries(Object.entries(SETTING_INPUTS).map(([key, id]) => [key, $(id)?.value]))),
             apiKey: String($('glmApiKey')?.value || '').trim(),
             rememberKey: !!$('rememberGlmKey')?.checked,
-            model: DEFAULT_GLM_MODEL,
-            strategyType: $('aiStrategyType')?.value || 'put',
-            riskProfile: $('aiRiskProfile')?.value || 'balanced',
-            minDays,
-            maxDays,
-            minBid: Math.max(0, toNumber($('aiMinBid')?.value, 1)),
-            minAnnualReturn: Math.max(0, toNumber($('aiMinAnnualReturn')?.value, 20)),
-            minStrikePct,
-            maxStrikePct,
-            minOpenInterest: Math.max(0, toNumber($('aiMinOpenInterest')?.value, 1)),
-            maxSpreadPct: clamp(toNumber($('aiMaxSpread')?.value, 45), 1, 300),
-            candidateLimit: clamp(toNumber($('aiCandidateLimit')?.value, 40), 10, 120),
-            perSymbolLimit: clamp(toNumber($('aiPerSymbolLimit')?.value, 3), 1, 20)
+            model: DEFAULT_GLM_MODEL
         };
     }
 
@@ -175,171 +151,24 @@
         return type === 'call' ? '备兑卖 Call' : '现金担保卖 Put';
     }
 
-    function getAllowedTypes(strategyType) {
-        if (strategyType === 'both') return ['put', 'call'];
-        return [strategyType === 'call' ? 'call' : 'put'];
-    }
-
-    function calculateLocalScore(candidate, riskProfile) {
-        const liquidityScore = Math.log10(candidate.openInterest + 1) * 1.8 + Math.log10(candidate.volume + 1) * 0.9;
-        const spreadPenalty = candidate.spreadPct * 0.08;
-        const shortDatedPenalty = candidate.daysToExpiry < 21 ? 1.8 : 0;
-        const longDatedPenalty = candidate.daysToExpiry > 75 ? 0.8 : 0;
-        const moneynessPenalty = candidate.optionType === 'put'
-            ? Math.max(0, candidate.strikePct) * 1.7
-            : Math.max(0, -candidate.strikePct) * 1.7;
-
-        if (riskProfile === 'conservative') {
-            return candidate.annualReturn * 0.72
-                + candidate.downsideProtectionPct * 1.15
-                + liquidityScore
-                - spreadPenalty * 1.35
-                - moneynessPenalty * 1.8
-                - shortDatedPenalty
-                - longDatedPenalty;
-        }
-
-        if (riskProfile === 'aggressive') {
-            return candidate.annualReturn * 1.12
-                + candidate.downsideProtectionPct * 0.35
-                + liquidityScore * 0.7
-                - spreadPenalty * 0.65
-                - moneynessPenalty
-                - longDatedPenalty;
-        }
-
-        return candidate.annualReturn * 0.92
-            + candidate.downsideProtectionPct * 0.7
-            + liquidityScore
-            - spreadPenalty
-            - moneynessPenalty * 1.25
-            - shortDatedPenalty * 0.6
-            - longDatedPenalty;
-    }
-
-    function buildCandidate(symbol, stockPrice, option, settings) {
-        const days = daysToExpiry(option.expiryDate);
-        if (!Number.isFinite(days) || days < settings.minDays || days > settings.maxDays) return null;
-
-        const optionType = option.optionType;
-        const strike = Number(option.strike);
-        const bid = Number(option.bid);
-        const ask = Number(option.ask);
-        const openInterest = Math.max(0, Number(option.openInterest) || 0);
-        const volume = Math.max(0, Number(option.volume) || 0);
-
-        if (!Number.isFinite(strike) || strike <= 0) return null;
-        if (!Number.isFinite(bid) || bid < settings.minBid) return null;
-        if (!Number.isFinite(ask) || ask <= 0 || ask < bid) return null;
-        if (openInterest < settings.minOpenInterest) return null;
-
-        const mid = (bid + ask) / 2;
-        const spreadPct = mid > 0 ? ((ask - bid) / mid) * 100 : 999;
-        if (!Number.isFinite(spreadPct) || spreadPct > settings.maxSpreadPct) return null;
-
-        const strikePct = ((strike / stockPrice) - 1) * 100;
-        if (strikePct < settings.minStrikePct || strikePct > settings.maxStrikePct) return null;
-
-        const netPremium = bid - 0.01;
-        if (netPremium <= 0) return null;
-
-        const collateral = optionType === 'put' ? strike * 100 : stockPrice * 100;
-        const premiumDollars = netPremium * 100;
-        const annualReturn = (premiumDollars / collateral) * (365 / days) * 100;
-        if (!Number.isFinite(annualReturn) || annualReturn <= 0) return null;
-        if (annualReturn < settings.minAnnualReturn) return null;
-
-        const breakEven = optionType === 'put' ? strike - netPremium : stockPrice - netPremium;
-        const downsideProtectionPct = optionType === 'put'
-            ? ((stockPrice - breakEven) / stockPrice) * 100
-            : (netPremium / stockPrice) * 100;
-        const id = `${symbol}-${optionType}-${option.expiryDate}-${strike.toFixed(2).replace('.', '_')}`;
-        const candidate = {
-            id,
-            symbol,
-            optionType,
-            strategy: getStrategyLabel(optionType),
-            contractSymbol: option.contractSymbol || '',
-            stockPrice,
-            expiryDate: option.expiryDate,
-            daysToExpiry: days,
-            strike,
-            strikePct,
-            bid,
-            ask,
-            spreadPct,
-            volume,
-            openInterest,
-            impliedVolatility: Number(option.impliedVolatility) || 0,
-            premiumDollars,
-            collateral,
-            annualReturn,
-            breakEven,
-            downsideProtectionPct,
-            lastTradeDate: option.lastTradeDate || ''
-        };
-        candidate.localScore = calculateLocalScore(candidate, settings.riskProfile);
-        return candidate;
-    }
-
-    function limitCandidatesPerSymbol(candidates, perSymbolLimit) {
-        const symbolCounts = new Map();
-        const limitedCandidates = [];
-
-        for (const candidate of candidates) {
-            const count = symbolCounts.get(candidate.symbol) || 0;
-            if (count >= perSymbolLimit) continue;
-
-            limitedCandidates.push(candidate);
-            symbolCounts.set(candidate.symbol, count + 1);
-        }
-
-        return limitedCandidates;
-    }
-
     async function scanLocalCandidates(settings, runId) {
         const api = window.apiService || new APIService();
         const symbols = getOverviewSymbols();
-        const allowedTypes = getAllowedTypes(settings.strategyType);
-        const candidates = [];
-        const errors = [];
-
-        if (symbols.length === 0) {
-            throw new Error('没有找到股票列表');
-        }
-
+        const snapshots = [];
+        const asOf = new Date().toISOString();
         for (let index = 0; index < symbols.length; index += 1) {
             if (runId !== activeRunId) return null;
             const symbol = symbols[index];
-            setProgress(5 + (index / symbols.length) * 62, `扫描 ${symbol} (${index + 1}/${symbols.length})`);
-
-            try {
-                const [stockData, optionsData] = await Promise.all([
-                    api.getStockPrice(symbol),
-                    api.getOptionsData(symbol)
-                ]);
-                const stockPrice = Number(stockData.price);
-                if (!Number.isFinite(stockPrice) || stockPrice <= 0) continue;
-
-                optionsData.options
-                    .filter(option => allowedTypes.includes(option.optionType))
-                    .forEach(option => {
-                        const candidate = buildCandidate(symbol, stockPrice, option, settings);
-                        if (candidate) candidates.push(candidate);
-                    });
-            } catch (error) {
-                errors.push(`${symbol}: ${error.message}`);
-            }
+            setProgress(5 + (index / symbols.length) * 62, '扫描 ' + symbol + ' (' + (index + 1) + '/' + symbols.length + ')');
+            const results = await Promise.allSettled([api.getStockPrice(symbol), api.getOptionsData(symbol)]);
+            snapshots.push({
+                symbol,
+                quote: results[0].status === 'fulfilled' ? results[0].value : null,
+                optionsData: results[1].status === 'fulfilled' ? results[1].value : null,
+                error: results.filter(result => result.status === 'rejected').map(result => result.reason.message).join('; ')
+            });
         }
-
-        candidates.sort((a, b) => b.localScore - a.localScore);
-        const limitedCandidates = limitCandidatesPerSymbol(candidates, settings.perSymbolLimit);
-        return {
-            symbols,
-            errors,
-            candidates: limitedCandidates,
-            shortlist: limitedCandidates.slice(0, settings.candidateLimit)
-        };
+        return analysis.scanSnapshots(snapshots, settings, { asOf, scope: 'browser-scan' });
     }
 
     function describeFilters(settings) {
@@ -1021,7 +850,7 @@
             `<td>${formatMoney(candidate.collateral, 0)}</td>`,
             `<td>${formatMoney(candidate.breakEven)}<span class="ai-subtext">垫 ${formatPct(candidate.downsideProtectionPct)}</span></td>`,
             `<td>${candidate.openInterest}</td>`,
-            `<td>${candidate.volume}</td>`,
+            `<td>${candidate.volume ?? '--'}</td>`,
             `<td><button class="btn btn-sm btn-outline-primary ai-view-matrix" data-symbol="${escapeHtml(candidate.symbol)}" data-type="${escapeHtml(candidate.optionType)}" data-expiry="${escapeHtml(candidate.expiryDate)}">查看矩阵</button></td>`,
             '</tr>'
         ].join('');
@@ -1046,7 +875,12 @@
         setOutput([
             errorHtml,
             '<div class="ai-summary-block">',
-            '<strong>候选扫描结果</strong>',
+            '<div class="ai-candidate-heading"><strong>候选扫描结果</strong>',
+            '<div class="ai-export-actions">',
+            '<button type="button" class="btn btn-sm btn-outline-secondary ai-export-button" data-export-scan="copy"><span class="tool-icon icon-copy" aria-hidden="true"></span>复制分析数据</button>',
+            '<button type="button" class="btn btn-sm btn-outline-secondary ai-export-button" data-export-scan="download"><span class="tool-icon icon-download" aria-hidden="true"></span>下载 JSON</button>',
+            '</div></div>',
+            '<div id="aiExportStatus" role="status" aria-live="polite"></div>',
             `<p>共 ${localScan.candidates.length} 个候选。筛选条件：${escapeHtml(describeFilters(settings))}。</p>`,
             `<p>扫描结果已限制每只股票最多保留本地评分前 ${settings.perSymbolLimit} 个；点击“AI分析 Top 10”会把其中前 ${localScan.shortlist.length} 个候选发送给智谱做总结和排序。</p>`,
             '</div>',
@@ -1055,11 +889,40 @@
             '<thead><tr>',
             headerCells,
             '</tr></thead>',
-            `<tbody>${tableRows}</tbody>`,
+            `<tbody>${tableRows || '<tr><td colspan="13">没有符合当前条件的候选。</td></tr>'}</tbody>`,
             '</table>',
             '</div>',
             `<div class="ai-mobile-results">${cards}</div>`
         ].join(''));
+    }
+
+    async function exportCurrentScan(action) {
+        if (!latestLocalScan) return;
+        const scan = latestLocalScan;
+        const payload = JSON.stringify(analysis.exportScan(scan), null, 2);
+        const status = $('aiExportStatus');
+        const download = () => {
+            const url = URL.createObjectURL(new Blob([payload + '\n'], { type: 'application/json' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'options-scan-' + scan.generatedAt.replace(/[:.]/g, '-') + '.json';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 30000);
+        };
+        if (action === 'download') {
+            download();
+            if (status) status.textContent = '已导出本次扫描结果及扫描时的筛选条件。';
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(payload);
+            if (status) status.textContent = '已复制本次扫描结果及扫描时的筛选条件。';
+        } catch {
+            download();
+            if (status) status.textContent = '剪贴板不可用，已改为下载 JSON。';
+        }
     }
 
     function sortCandidateList(column) {
@@ -1119,18 +982,12 @@
         try {
             const localScan = await scanLocalCandidates(settings, runId);
             if (!localScan || runId !== activeRunId) return;
-            if (localScan.candidates.length === 0) {
-                setStatus('无候选');
-                setProgress(100, '没有符合过滤条件的候选');
-                setOutput('<div class="ai-empty-state ai-empty-state-error">没有找到符合当前过滤条件的期权候选，请放宽买价、相对差、持仓、价差或到期范围。</div>');
-                return;
-            }
 
             latestLocalScan = localScan;
             latestCandidateSettings = settings;
             latestScanSignature = getScanSignature(settings);
             candidateSortConfig = { ...DEFAULT_CANDIDATE_SORT };
-            setStatus('候选完成');
+            setStatus(localScan.candidates.length ? '候选完成' : '无候选');
             setProgress(100, `扫描完成，共 ${localScan.candidates.length} 个候选`);
             renderCandidateList(localScan, settings);
         } catch (error) {
@@ -1299,6 +1156,11 @@
         const output = $('aiRecommendationOutput');
         if (output) {
             output.addEventListener('click', event => {
+                const exportButton = event.target.closest('[data-export-scan]');
+                if (exportButton) {
+                    exportCurrentScan(exportButton.dataset.exportScan);
+                    return;
+                }
                 const sortHeader = event.target.closest('.ai-candidate-table th[data-ai-sort]');
                 if (sortHeader) {
                     sortCandidateList(sortHeader.getAttribute('data-ai-sort'));
@@ -1312,6 +1174,9 @@
     }
 
     function init() {
+        for (const [key, id] of Object.entries(SETTING_INPUTS)) {
+            if ($(id)) $(id).value = analysis.DEFAULTS[key];
+        }
         restoreKey();
         bindEvents();
         updateHistoryButtonCount();
@@ -1321,7 +1186,8 @@
         run: runRecommendation,
         scan: runCandidateScan,
         getSettings,
-        getOverviewSymbols
+        getOverviewSymbols,
+        getScanExport: () => latestLocalScan ? analysis.exportScan(latestLocalScan) : null
     };
 
     if (document.readyState === 'loading') {

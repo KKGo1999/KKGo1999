@@ -1,0 +1,21 @@
+# Options Analysis Data
+
+> Public stock and delayed option snapshots for the KKGo1999 options page. No JavaScript, login, or API key is required to read these resources.
+
+Start with the HTML directory or stocks.json. Follow explicit links to a symbol and expiry. Compare snapshotId across resources; if they differ, reread the directory. Quote timestamps and generation timestamps are different. A new build is not proof of a fresh quote. These are delayed snapshots, not live executable prices.
+
+## Directory
+
+- [Readable directory](https://www.kkgo1999.top/options/agent/): Stock list, source times, default candidates, links to all expiries.
+- [Stock data](https://www.kkgo1999.top/options/data/stocks.json): watchlist, all supported symbols, quotes, failures, expiry pagination links.
+- [Default candidates](https://www.kkgo1999.top/options/data/candidates.json): Exact filters, ranking, pre/post-limit counts, sources, and assumptions.
+- [Option manifest](https://www.kkgo1999.top/options/data/options-manifest.json): Snapshot identity and per-symbol availability.
+- [Fields and formulas](https://www.kkgo1999.top/options/agent/fields.md): Units, time handling, screening, scoring, and failure semantics.
+
+## Reading Rules
+
+The default scan uses only symbols with inWatchlist=true. AAPL and NVDA are supported for lookup but are not currently in that list. candidates is capped per symbol; shortlistIds lists the candidate IDs eligible for AI analysis, additionally capped by candidateLimit. Candidate records are not duplicated. Neither is the complete option chain. Follow stocks.json expirations.pages to retrieve every contract, with at most 200 contracts per page.
+
+Browser exports have scope=browser-scan and capture that user's scan settings at scan time. Public data has scope=published-default and uses the published defaults. Changing a browser filter does not change public files. Browser-only API keys and AI history are not public resources.
+
+Source times without a timezone are preserved verbatim with sourceTimeZone=null. Missing values are null, never zero. Report unavailable symbols and quote age uncertainty; do not silently treat partial scans as complete. Local scores are ranking heuristics, not probabilities.

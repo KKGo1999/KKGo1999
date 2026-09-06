@@ -377,6 +377,7 @@ body {
 }
 
 .ai-summary-block {
+    color: var(--text-color);
     margin-bottom: 0.85rem;
     padding: 0.85rem;
     border: 1px solid var(--advanced-border);
@@ -393,6 +394,72 @@ body {
     margin: 0.5rem 0 0;
     padding-left: 1.1rem;
     color: var(--advanced-muted);
+}
+
+.ai-candidate-heading,
+.ai-export-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ai-candidate-heading {
+    justify-content: space-between;
+    margin-bottom: 0.65rem;
+}
+
+.ai-export-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 36px;
+    color: var(--text-color);
+    border-color: var(--advanced-muted);
+}
+
+.ai-export-button:hover,
+.ai-export-button:focus-visible {
+    color: var(--text-color);
+    background: var(--table-hover);
+    border-color: var(--advanced-accent);
+}
+
+@media (max-width: 576px) {
+    .ai-export-button { min-height: 44px; }
+}
+
+.tool-icon {
+    display: inline-block;
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    background-color: currentColor;
+    -webkit-mask: var(--tool-icon) center / contain no-repeat;
+    mask: var(--tool-icon) center / contain no-repeat;
+}
+
+.icon-copy { --tool-icon: url('icons/copy.svg'); }
+.icon-download { --tool-icon: url('icons/download.svg'); }
+
+#aiExportStatus {
+    color: var(--advanced-muted);
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+}
+
+.page-data-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.page-data-note a {
+    color: var(--advanced-accent);
+    white-space: nowrap;
 }
 
 .ai-history-panel {
