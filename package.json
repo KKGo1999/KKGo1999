@@ -1,0 +1,14 @@
+{
+  "name": "kkgo1999-options",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test scripts/test-options-agent.js",
+    "build": "node scripts/build-options-data.js"
+  },
+  "devDependencies": {
+    "marked": "17.0.5"
+  }
+}

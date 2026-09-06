@@ -1,4 +1,7 @@
 .DS_Store
+node_modules/
 options/data/
 options/agent/index.html
+options/agent/fields.html
+options/agent/fields.txt
 options/agent/stocks/

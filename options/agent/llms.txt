@@ -10,7 +10,8 @@ Start with the HTML directory or stocks.json. Follow explicit links to a symbol 
 - [Stock data](https://www.kkgo1999.top/options/data/stocks.json): watchlist, all supported symbols, quotes, failures, expiry pagination links.
 - [Default candidates](https://www.kkgo1999.top/options/data/candidates.json): Exact filters, ranking, pre/post-limit counts, sources, and assumptions.
 - [Option manifest](https://www.kkgo1999.top/options/data/options-manifest.json): Snapshot identity and per-symbol availability.
-- [Fields and formulas](https://www.kkgo1999.top/options/agent/fields.md): Units, time handling, screening, scoring, and failure semantics.
+- [Fields and formulas](https://www.kkgo1999.top/options/agent/fields.html): Full static HTML documentation of units, time handling, screening, scoring, and failure semantics.
+- [Plain-text documentation fallback](https://www.kkgo1999.top/options/agent/fields.txt): The same documentation served as text/plain; use if the reader cannot parse HTML or text/markdown. Do not infer missing field definitions.
 
 ## Reading Rules
 

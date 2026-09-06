@@ -6,4 +6,5 @@
 
 - [Options data guide](https://www.kkgo1999.top/options/agent/llms.txt): Entry points, data scope, units, and reading rules.
 - [Readable stock and options directory](https://www.kkgo1999.top/options/agent/): Static stock tables and paginated option chains.
-- [Fields and formulas](https://www.kkgo1999.top/options/agent/fields.md): Data interpretation and calculation methodology.
+- [Fields and formulas](https://www.kkgo1999.top/options/agent/fields.html): Static HTML data interpretation and calculation methodology.
+- [Plain-text documentation fallback](https://www.kkgo1999.top/options/agent/fields.txt): Same field documentation for readers that cannot parse HTML or text/markdown.

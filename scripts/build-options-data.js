@@ -145,7 +145,8 @@ async function buildSite({
         const manifest = {
             ...metadata, source: 'Cboe delayed options quotes', failures,
             stocksUrl: '/options/data/stocks.json', candidatesUrl: '/options/data/candidates.json',
-            agentUrl: '/options/agent/', fieldsUrl: '/options/agent/fields.md',
+            agentUrl: '/options/agent/', fieldsUrl: '/options/agent/fields.html',
+            fieldsTextUrl: '/options/agent/fields.txt', fieldsMarkdownUrl: '/options/agent/fields.md',
             symbols: stocks.map(stock => ({
                 symbol: stock.symbol, inWatchlist: stock.inWatchlist, status: stock.status,
                 optionCount: stock.optionCount, url: stock.optionsUrl,

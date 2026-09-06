@@ -22,10 +22,10 @@ function document(title, body, metadata, depth = '') {
         '<meta name="viewport" content="width=device-width,initial-scale=1">' +
         '<meta name="description" content="期权分析公开数据：股票、期权链、默认筛选候选与计算口径。">' +
         '<title>' + escape(title) + ' | 期权分析</title>' +
-        '<link rel="stylesheet" href="' + depth + 'agent.css?v=20260906-1">' +
+        '<link rel="stylesheet" href="' + depth + 'agent.css?v=20260906-2">' +
         '<link rel="describedby" href="' + depth + 'llms.txt" type="text/plain">' +
         '</head><body><header><a href="' + depth + '../">期权分析</a><nav>' +
-        link(depth + 'index.html', 'Agent 数据') + link(depth + 'fields.md', '字段与计算口径') +
+        link(depth + 'index.html', 'Agent 数据') + link(depth + 'fields.html', '字段与计算口径') +
         '</nav></header><main><h1>' + escape(title) + '</h1>' +
         '<p class="metadata">快照 ' + escape(metadata.snapshotId) + '<br>生成时间（UTC） ' +
         escape(metadata.generatedAt) + '</p>' +
@@ -50,7 +50,28 @@ function quoteSummary(stock) {
         escape(stock.optionsSourceTimestamp || '未提供') + '</p>';
 }
 
+async function renderFieldsDocumentation(root, metadata) {
+    const { Marked, Renderer } = await import('marked');
+    const source = await fs.readFile(path.join(__dirname, '../options/agent/fields.md'), 'utf8');
+    const renderer = new Renderer();
+    const renderTable = renderer.table;
+    renderer.table = function (token) {
+        return '<div class="table-scroll" tabindex="0" role="region" aria-label="字段说明">' +
+            renderTable.call(this, token) + '</div>';
+    };
+    const markdown = new Marked({ renderer });
+    const tokens = markdown.lexer(source);
+    const title = tokens[0]?.type === 'heading' && tokens[0].depth === 1
+        ? tokens.shift().text : '字段与计算口径';
+    const body = '<p class="links">' + link('fields.txt', '纯文本版本') +
+        link('fields.md', 'Markdown 源文件') + '</p><article class="guide-content">' +
+        markdown.parser(tokens) + '</article>';
+    await write(root, 'options/agent/fields.html', document(title, body, metadata));
+    await write(root, 'options/agent/fields.txt', source);
+}
+
 async function renderAgentSite(root, stocksData, scan, snapshots) {
+    await renderFieldsDocumentation(root, stocksData);
     const meta = stocksData;
     const stockRows = [];
     for (const stock of stocksData.stocks) {
@@ -149,4 +170,4 @@ async function renderAgentSite(root, stocksData, scan, snapshots) {
     await write(root, 'options/data/stocks.json', json(stocksData));
 }
 
-module.exports = { renderAgentSite, PAGE_SIZE };
+module.exports = { renderAgentSite, renderFieldsDocumentation, PAGE_SIZE };

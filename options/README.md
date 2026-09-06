@@ -22,6 +22,7 @@
 从项目根目录执行：
 
 ```sh
+npm ci --ignore-scripts --no-audit --no-fund
 node --test scripts/test-options-agent.js
 node scripts/build-options-data.js
 python3 -m http.server 8766 --bind 127.0.0.1
@@ -31,9 +32,11 @@ python3 -m http.server 8766 --bind 127.0.0.1
 
 股票清单、默认参数和筛选评分共用 options/analysisCore.js。只需修改其中 WATCHLIST / SUPPORTED_SYMBOLS，再重新构建；页面概览、扫描和 Agent 目录会使用同一清单。
 
-构建会生成 options/data/ 和 options/agent/ 下的 index.html、stocks/，这些行情产物不提交 Git，GitHub Actions 测试通过后重新生成并随站点部署。个别股票失败会保留失败记录；全部期权获取失败则阻止本次发布。
+构建会生成 options/data/ 和 options/agent/ 下的 index.html、stocks/、fields.html、fields.txt，这些产物不提交 Git，GitHub Actions 测试通过后重新生成并随站点部署。个别股票失败会保留失败记录；全部期权获取失败则阻止本次发布。
 
-主页面扫描后可“复制分析数据”或“下载 JSON”。导出保存扫描时的条件及结果，不包含 API Key、AI History；公开默认候选不会随着本机输入框的修改而变化。字段、公式、时间口径和分页规则见 [Agent 数据说明](agent/fields.md)。
+主页面扫描后可“复制分析数据”或“下载 JSON”。导出保存扫描时的条件及结果，不包含 API Key、AI History；公开默认候选不会随着本机输入框的修改而变化。字段、公式、时间口径和分页规则见 [Agent 数据说明](https://www.kkgo1999.top/options/agent/fields.html)。
+
+字段说明仅维护 [fields.md 源文件](agent/fields.md)，构建时通过 Marked 生成完整的静态 HTML，并原样复制为 text/plain 的 fields.txt。Agent 优先读取 fields.html，遇到读取工具格式兼容问题时改读 fields.txt，无需依赖 text/markdown 或执行 JavaScript。
 
 ### 1. 免费数据源
 

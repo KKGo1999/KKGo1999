@@ -6,7 +6,7 @@ const os = require('node:os');
 const vm = require('node:vm');
 const core = require('../options/analysisCore.js');
 const { buildSite, normalizeOption, parseContractSymbol } = require('./build-options-data.js');
-const { PAGE_SIZE } = require('./render-agent-site.js');
+const { renderFieldsDocumentation, PAGE_SIZE } = require('./render-agent-site.js');
 
 const asOf = '2026-09-06T12:00:00.000Z';
 const expiryDate = '2026-10-16';
@@ -106,6 +106,31 @@ test('normalization preserves missing fields and rejects impossible expiry dates
     assert.equal(normalizeOption({ option: 'BILI1261016P00015000' }, 'BILI').contractMultiplier, null);
 });
 
+test('field documentation has complete no-JavaScript HTML and lossless text fallback', async t => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'options-fields-test-'));
+    t.after(() => fs.rm(root, { recursive: true, force: true }));
+    await renderFieldsDocumentation(root, { snapshotId: 'docs-fixture', generatedAt: asOf });
+    const source = await fs.readFile(path.join(__dirname, '../options/agent/fields.md'), 'utf8');
+    const html = await fs.readFile(path.join(root, 'options/agent/fields.html'), 'utf8');
+    const plain = await fs.readFile(path.join(root, 'options/agent/fields.txt'), 'utf8');
+    assert.equal(plain, source);
+    assert.ok(html.startsWith('<!doctype html>'));
+    assert.ok(!html.includes('<script'));
+    assert.equal((html.match(/<h1>/g) || []).length, 1);
+    for (const [, title] of source.matchAll(/^## (.+)$/gm)) {
+        assert.ok(html.includes('<h2>' + title + '</h2>'), title);
+    }
+    for (const field of ['contractSymbol', 'sourceTimeZone=null', 'shortlistIds',
+        'annualReturn = premiumDollars / collateral × 365 / D × 100', 'assumptions.scoreVersion=2.0.0']) {
+        assert.ok(html.includes(field), field);
+    }
+    assert.ok(html.includes('<table>'));
+    assert.ok(html.includes('class="table-scroll"'));
+    assert.ok(html.includes('href="fields.txt"'));
+    assert.ok(html.includes('href="fields.md"'));
+    assert.ok(html.includes('docs-fixture'));
+});
+
 test('build publishes static HTML, complete pagination, identical snapshot IDs and partial failures', async t => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'options-agent-test-'));
     t.after(() => fs.rm(root, { recursive: true, force: true }));
@@ -127,6 +152,12 @@ test('build publishes static HTML, complete pagination, identical snapshot IDs a
     const candidates = JSON.parse(await read('data/candidates.json'));
     const full = JSON.parse(await read('data/options/BILI.json'));
     const html = await read('agent/index.html');
+    assert.ok(html.includes('href="fields.html"'));
+    assert.equal(result.manifest.fieldsUrl, '/options/agent/fields.html');
+    assert.equal(result.manifest.fieldsTextUrl, '/options/agent/fields.txt');
+    assert.equal(result.manifest.fieldsMarkdownUrl, '/options/agent/fields.md');
+    assert.ok((await read('agent/fields.html')).includes(stocks.snapshotId));
+    assert.equal(await read('agent/fields.txt'), await fs.readFile(path.join(__dirname, '../options/agent/fields.md'), 'utf8'));
     assert.equal(stocks.snapshotId, full.snapshotId);
     assert.equal(stocks.snapshotId, candidates.snapshotId);
     assert.equal(stocks.stocks.length, 3);
@@ -147,6 +178,7 @@ test('build publishes static HTML, complete pagination, identical snapshot IDs a
         const pageHtml = await fs.readFile(path.join(root, page.htmlUrl), 'utf8');
         assert.ok(pageHtml.includes('BILI'));
         assert.ok(pageHtml.includes('本页 JSON'));
+        assert.ok(pageHtml.includes('href="../../fields.html"'));
     }
     assert.deepEqual(collected, full.options.map(row => row.contractSymbol));
     const recalculated = core.scanSnapshots(result.snapshots.filter(row => core.WATCHLIST.includes(row.symbol)),

@@ -47,6 +47,11 @@ th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: l
 th { background: var(--surface); font-weight: 600; }
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: var(--surface); }
+.guide-content { max-width: 1000px; overflow-wrap: anywhere; }
+.guide-content h2 { margin-top: 28px; }
+.guide-content li { margin: 8px 0; }
+.guide-content td { white-space: normal; vertical-align: top; min-width: 140px; }
+.guide-content td:first-child { width: 32%; }
 footer { border-top: 1px solid var(--line); margin-top: 24px; }
 @media (max-width: 600px) {
     header, main, footer { padding: 16px; }
