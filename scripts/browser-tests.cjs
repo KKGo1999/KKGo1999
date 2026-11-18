@@ -65,6 +65,16 @@ function aiEvents(body, mode = 'success') {
     return events.map(event => 'data: ' + JSON.stringify(event) + '\r\n\r\n').join('') + 'data: [DONE]\r\n\r\n';
 }
 
+function holdNextAiResponse(state) {
+    const gate = {
+        started: Promise.withResolvers(),
+        release: Promise.withResolvers(),
+        finished: Promise.withResolvers()
+    };
+    state.nextAiResponse = gate;
+    return gate;
+}
+
 async function fixture(browser, options = {}) {
     const context = await browser.newContext({ viewport: options.viewport || { width: 1440, height: 1000 },
         colorScheme: options.dark ? 'dark' : 'light', acceptDownloads: true });
@@ -86,9 +96,17 @@ async function fixture(browser, options = {}) {
             await route.fulfill({ json: chain(symbol, state.stale) });
         } else if (['api.openai.com', 'open.bigmodel.cn'].includes(url.hostname)) {
             const body = route.request().postDataJSON();
+            const mode = state.mode;
+            const gate = state.nextAiResponse;
+            state.nextAiResponse = null;
             state.requests.push({ url: url.href, body, authorization: route.request().headers().authorization });
-            if (state.mode === 'slow') await wait(1000);
-            await route.fulfill({ contentType: 'text/event-stream', body: aiEvents(body, state.mode) });
+            if (gate) {
+                gate.started.resolve();
+                await gate.release.promise;
+            }
+            try {
+                await route.fulfill({ contentType: 'text/event-stream', body: aiEvents(body, mode) });
+            } finally { gate?.finished.resolve(); }
         } else if (url.origin === origin) await route.continue();
         else await route.abort();
     });
@@ -176,11 +194,28 @@ for (const profile of [
             assert.match(await page.locator('#aiRecommendationOutput').textContent(), /非\s*AI\s*推荐/);
             assert.equal((await readHistory(page)).length, 1);
 
-            state.mode = 'slow';
-            await page.locator('#runAiRecommendation').click();
-            await page.waitForFunction(() => !document.querySelector('#cancelAiAnalysis').hidden);
-            await page.locator('#cancelAiAnalysis').click();
-            await wait(1100);
+            state.mode = 'success';
+            await page.evaluate(() => {
+                const originalFetch = window.fetch;
+                window.fetch = (url, options) => {
+                    if (url === window.OptionsAI.PROVIDERS.openai.url) window.testAiSignal = options.signal;
+                    return originalFetch(url, options);
+                };
+            });
+            const heldResponse = holdNextAiResponse(state);
+            try {
+                await page.locator('#runAiRecommendation').click();
+                await heldResponse.started.promise;
+                await expectStatus(page, '分析中');
+                // Deliberately outlast the old one-second mock; the response stays pending until cancellation.
+                await wait(1500);
+                await page.locator('#cancelAiAnalysis').click();
+                await expectStatus(page, '已取消');
+                assert.equal(await page.evaluate(() => window.testAiSignal.aborted), true);
+                assert.equal(await page.locator('#cancelAiAnalysis').isVisible(), false);
+                assert.equal(await page.locator('#runAiRecommendation').isEnabled(), true);
+            } finally { heldResponse.release.resolve(); }
+            await heldResponse.finished.promise;
             await expectStatus(page, '已取消');
             assert.equal((await readHistory(page)).length, 1);
 
