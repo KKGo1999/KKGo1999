@@ -8,7 +8,7 @@ class APIService {
         this.tencentKlineUrl = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=';
         this.optionsDataBaseUrl = 'data/options';
         this.dataSource = 'tencent-cboe-cache';
-        this.debug = true;
+        this.debug = false;
         this.pageCache = new Map();
         this.cacheTtlMs = 2 * 60 * 1000;
         this.tencentKlineSuffixMap = {
@@ -46,6 +46,7 @@ class APIService {
     }
 
     logError(message, error = null) {
+        if (error?.name === 'AbortError') return;
         if (error) {
             console.error(`[ERROR] ${message}`, error);
         } else {
@@ -57,48 +58,37 @@ class APIService {
         return String(symbol || '').trim().toUpperCase();
     }
 
-    async fetchText(url) {
+    async request(url, format, { signal, force = false } = {}) {
+        if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
         const cached = this.pageCache.get(url);
-        if (cached && Date.now() - cached.timestamp < this.cacheTtlMs) {
-            return cached.text;
+        if (!force && cached && Date.now() - cached.timestamp < this.cacheTtlMs) return cached[format];
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        signal?.addEventListener('abort', abort, { once: true });
+        const timer = setTimeout(abort, 15000);
+        try {
+            const response = await fetch(url, {
+                headers: { Accept: format === 'json' ? 'application/json' : 'text/plain,*/*' },
+                cache: force ? 'no-cache' : 'default', signal: controller.signal
+            });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const value = await response[format]();
+            if (controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+            this.pageCache.set(url, { [format]: value, timestamp: Date.now() });
+            return value;
+        } finally {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', abort);
         }
-
-        this.logDebug(`请求URL: ${url}`);
-        const response = await fetch(url, {
-            headers: { 'Accept': 'text/plain,*/*' }, signal: AbortSignal.timeout(15000)
-        });
-        if (!response.ok) {
-            throw new Error(`HTTP错误: ${response.status}`);
-        }
-
-        const text = await response.text();
-        this.pageCache.set(url, { text, timestamp: Date.now() });
-        return text;
     }
 
-    async fetchJson(url) {
-        const cached = this.pageCache.get(url);
-        if (cached && Date.now() - cached.timestamp < this.cacheTtlMs) {
-            return cached.json;
-        }
+    fetchText(url, options) { return this.request(url, 'text', options); }
+    fetchJson(url, options) { return this.request(url, 'json', options); }
 
-        this.logDebug(`请求URL: ${url}`);
-        const response = await fetch(url, {
-            headers: { 'Accept': 'application/json,*/*' }, signal: AbortSignal.timeout(15000)
-        });
-        if (!response.ok) {
-            throw new Error(`HTTP错误: ${response.status}`);
-        }
-
-        const json = await response.json();
-        this.pageCache.set(url, { json, timestamp: Date.now() });
-        return json;
-    }
-
-    async getTencentQuote(symbol) {
+    async getTencentQuote(symbol, requestOptions) {
         const normalizedSymbol = this.normalizeSymbol(symbol);
         const url = `${this.tencentQuoteUrl}us${encodeURIComponent(normalizedSymbol)}`;
-        const text = await this.fetchText(url);
+        const text = await this.fetchText(url, requestOptions);
         const match = text.match(/="([^"]*)"/);
         if (!match) {
             throw new Error(`腾讯财经未返回${normalizedSymbol}行情`);
@@ -211,9 +201,12 @@ class APIService {
         return `${this.optionsDataBaseUrl}/${encodeURIComponent(symbol)}.json`;
     }
 
-    async getOptionsData(symbol) {
+    async getOptionsData(symbol, requestOptions) {
         const normalizedSymbol = this.normalizeSymbol(symbol);
-        const data = await this.fetchJson(this.getOptionsDataUrl(normalizedSymbol));
+        const data = await this.fetchJson(this.getOptionsDataUrl(normalizedSymbol), requestOptions);
+        if (data?.symbol !== normalizedSymbol || !String(data?.schemaVersion || '').startsWith('1.')) {
+            throw new Error('期权缓存格式或股票代码不匹配');
+        }
         const options = data?.options;
 
         if (!Array.isArray(options) || options.length === 0) {
@@ -224,34 +217,33 @@ class APIService {
     }
 
     isFutureOrToday(date) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const expiry = new Date(`${date}T00:00:00`);
-        return !Number.isNaN(expiry.getTime()) && expiry >= today;
+        const core = typeof window !== 'undefined' ? window.OptionsAnalysis : require('./analysisCore.js');
+        const days = core.daysToExpiry(date, new Date().toISOString());
+        return days !== null && days >= 0;
     }
 
-    async getStockPrice(symbol) {
+    async getStockPrice(symbol, requestOptions) {
         const normalizedSymbol = this.normalizeSymbol(symbol);
         if (!normalizedSymbol) {
             throw new Error('股票代码不能为空');
         }
 
         try {
-            return await this.getTencentQuote(normalizedSymbol);
+            return await this.getTencentQuote(normalizedSymbol, requestOptions);
         } catch (error) {
             this.logError(`获取${normalizedSymbol}股票价格失败`, error);
             throw error;
         }
     }
 
-    async getOptionsExpiryDates(symbol) {
+    async getOptionsExpiryDates(symbol, requestOptions) {
         const normalizedSymbol = this.normalizeSymbol(symbol);
         if (!normalizedSymbol) {
             throw new Error('股票代码不能为空');
         }
 
         try {
-            const data = await this.getOptionsData(normalizedSymbol);
+            const data = await this.getOptionsData(normalizedSymbol, requestOptions);
             const dates = [...new Set(data.options.map(option => option.expiryDate))]
                 .filter(Boolean)
                 .filter(date => this.isFutureOrToday(date))
@@ -269,7 +261,7 @@ class APIService {
         }
     }
 
-    async getOptionsChain(symbol, expiryDate, optionType) {
+    async getOptionsChain(symbol, expiryDate, optionType, requestOptions) {
         const normalizedSymbol = this.normalizeSymbol(symbol);
         if (!normalizedSymbol) {
             throw new Error('股票代码不能为空');
@@ -279,7 +271,7 @@ class APIService {
         }
 
         try {
-            const data = await this.getOptionsData(normalizedSymbol);
+            const data = await this.getOptionsData(normalizedSymbol, requestOptions);
             const optionsChain = data.options
                 .filter(option => option.expiryDate === expiryDate && option.optionType === optionType)
                 .sort((a, b) => a.strike - b.strike);

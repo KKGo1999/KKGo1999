@@ -5,10 +5,13 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test scripts/test-options-agent.js",
-    "build": "node scripts/build-options-data.js"
+    "test": "node --test scripts/test-*.js",
+    "test:browser": "node --test scripts/browser-tests.cjs",
+    "build:data": "node scripts/build-options-data.js",
+    "build": "node scripts/package-site.js"
   },
   "devDependencies": {
-    "marked": "17.0.5"
+    "marked": "17.0.5",
+    "playwright": "1.62.1"
   }
 }

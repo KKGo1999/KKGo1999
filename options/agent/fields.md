@@ -15,7 +15,7 @@
 
 ## 快照和时间
 
-schemaVersion=1.0.0 是数据格式版本；snapshotId 标识一次构建，股票、完整链、分页、默认候选、HTML 使用相同 ID。读取过程中若 ID 不一致，应重新读取目录，避免混用部署版本。
+schemaVersion=1.1.0 是数据格式版本（兼容 1.x，新增 dataQuality）；snapshotId 标识一次构建，股票、完整链、分页、默认候选、HTML 使用相同 ID。读取过程中若 ID 不一致，应重新读取目录，避免混用部署版本。
 
 generatedAt 是生成/分析时刻，采用带 Z 的 UTC ISO 8601 格式。retrievedAt 是实际抓取时刻；浏览器缓存命中时保留最初抓取时间。二者均不是交易所行情时刻。
 
@@ -25,7 +25,9 @@ sourceTimestamp、lastTradeDate 保留上游原文。上游没有明确时区，
 
 analysisDate 按 America/New_York 的日历日期确定。到期天数等于到期日期与该日期的日历日差，避免用户所在时区或夏令时改变排序；不表示距离最后可交易时刻的精确小时数。
 
-mode=cached-preview 只用于明确标识的旧缓存预览，不是新行情。正常构建为 published-default。
+mode=cached-preview 标识刷新失败后使用的旧快照，或明确标识的旧缓存预览，不是新行情；保留原 generatedAt 和源站时间。正常构建为 published-default。
+
+dataQuality 包含 status、requiresConfirmation、maxAgeHours、sourceTimeZone 和 issues。当前阈值为 96 小时；缓存生成/股价抓取时间缺失、过旧或异常未来、源站原始日期超过 4 天、混合快照或 cached-preview 都会告警。源站时间只检查日期，不推测时区。该规则是提示，不保证阈值内数据可交易；浏览器在付费 AI 请求前要求确认告警或部分失败，Agent 也应明确披露这些限制。
 
 ## 股票字段
 
@@ -73,7 +75,7 @@ counts.optionsRead 是已读取合约数；matchedBeforeSymbolLimit 是单股截
 
 ## 收益公式
 
-沿用主页面现有的权利金收益口径。记股价 S、执行价 K、买方出价 B、卖方要价 A、到期天数 D、合约乘数 M=100：
+矩阵、候选扫描和 Agent 构建共用 analysisCore.js 的权利金收益口径。记股价 S、执行价 K、买方出价 B、卖方要价 A、到期天数 D、合约乘数 M=100：
 
 - 净权利金/股 N = B - 0.01。费用假设为 $0.01/股，即标准合约 $1/张，不是实际券商费率。
 - 价差 spreadPct = (A - B) / ((A + B) / 2) × 100。

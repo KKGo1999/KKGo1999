@@ -10,7 +10,7 @@
         'DUOL', 'TSLA', 'TSLL', 'OSCR', 'HIMS', 'HOOD', 'CRWV', 'SOFI', 'AMD'
     ]);
     const SUPPORTED_SYMBOLS = Object.freeze([...new Set([...WATCHLIST, 'AAPL', 'NVDA'])].sort());
-    const SCHEMA_VERSION = '1.0.0';
+    const SCHEMA_VERSION = '1.1.0';
     const SCORE_VERSION = '2.0.0';
     const DEFAULTS = Object.freeze({
         strategyType: 'put', riskProfile: 'balanced', minDays: 30, maxDays: 200,
@@ -94,50 +94,83 @@
             - spreadPenalty - moneynessPenalty * 1.25 - shortDatedPenalty * 0.6 - longDatedPenalty;
     }
 
-    function buildCandidate(symbol, stockPrice, option, settings, asOf, analysisDate) {
+    function optionMetrics(symbol, stockPrice, option, asOf, analysisDate) {
         const days = daysToExpiry(option.expiryDate, asOf, analysisDate);
-        if (days === null || days < settings.minDays || days > settings.maxDays || days <= 0) return null;
-        const optionType = option.optionType;
-        if (!['put', 'call'].includes(optionType)) return null;
-        if (settings.strategyType !== 'both' && optionType !== settings.strategyType) return null;
         const strike = numberOrNull(option.strike);
         const bid = numberOrNull(option.bid);
+        const root = String(option.contractSymbol || '').match(/^(.+?)\d{6}[CP]\d{8}$/)?.[1];
+        if (root !== symbol || (option.contractMultiplier != null && option.contractMultiplier !== 100)) return null;
+        if (!['put', 'call'].includes(option.optionType) || days === null || days <= 0 ||
+            !Number.isFinite(stockPrice) || stockPrice <= 0 || strike === null || strike <= 0 ||
+            bid === null || bid <= ASSUMPTIONS.feePerShare) return null;
+        const netPremium = bid - ASSUMPTIONS.feePerShare;
+        const collateral = (option.optionType === 'put' ? strike : stockPrice) * ASSUMPTIONS.contractMultiplier;
+        const premiumDollars = netPremium * ASSUMPTIONS.contractMultiplier;
+        const breakEven = (option.optionType === 'put' ? strike : stockPrice) - netPremium;
+        const metrics = {
+            daysToExpiry: days, strike, bid, stockPrice,
+            strikePct: (strike / stockPrice - 1) * 100,
+            premiumDollars, collateral, breakEven,
+            annualReturn: (premiumDollars / collateral) * (365 / days) * 100,
+            downsideProtectionPct: option.optionType === 'put'
+                ? ((stockPrice - breakEven) / stockPrice) * 100 : (netPremium / stockPrice) * 100
+        };
+        return Object.values(metrics).every(Number.isFinite) ? metrics : null;
+    }
+
+    function buildCandidate(symbol, stockPrice, option, settings, asOf, analysisDate) {
+        const metrics = optionMetrics(symbol, stockPrice, option, asOf, analysisDate);
+        if (!metrics || metrics.daysToExpiry < settings.minDays || metrics.daysToExpiry > settings.maxDays) return null;
+        if (settings.strategyType !== 'both' && option.optionType !== settings.strategyType) return null;
         const ask = numberOrNull(option.ask);
         const openInterest = numberOrNull(option.openInterest);
         const rawVolume = numberOrNull(option.volume);
         const volume = rawVolume !== null && rawVolume >= 0 ? rawVolume : null;
-        if (stockPrice === null || !Number.isFinite(stockPrice) || stockPrice <= 0) return null;
-        if (strike === null || strike <= 0 || bid === null || bid < settings.minBid || bid <= 0) return null;
-        if (ask === null || ask <= 0 || ask < bid || openInterest === null || openInterest < settings.minOpenInterest) return null;
-        // A changed OCC root may indicate a nonstandard deliverable; do not assume 100 shares for it.
-        const root = String(option.contractSymbol || '').match(/^(.+?)\d{6}[CP]\d{8}$/)?.[1];
-        if (root !== symbol || (option.contractMultiplier != null && option.contractMultiplier !== 100)) return null;
-        const mid = (bid + ask) / 2;
-        const spreadPct = ((ask - bid) / mid) * 100;
-        if (spreadPct > settings.maxSpreadPct) return null;
-        const strikePct = (strike / stockPrice - 1) * 100;
-        if (strikePct < settings.minStrikePct || strikePct > settings.maxStrikePct) return null;
-        const netPremium = bid - ASSUMPTIONS.feePerShare;
-        if (netPremium <= 0) return null;
-        const collateral = (optionType === 'put' ? strike : stockPrice) * ASSUMPTIONS.contractMultiplier;
-        const premiumDollars = netPremium * ASSUMPTIONS.contractMultiplier;
-        const annualReturn = (premiumDollars / collateral) * (365 / days) * 100;
-        if (!Number.isFinite(annualReturn) || annualReturn < settings.minAnnualReturn) return null;
-        const breakEven = (optionType === 'put' ? strike : stockPrice) - netPremium;
-        const downsideProtectionPct = optionType === 'put'
-            ? ((stockPrice - breakEven) / stockPrice) * 100 : (netPremium / stockPrice) * 100;
+        if (metrics.bid < settings.minBid || ask === null || ask < metrics.bid ||
+            openInterest === null || openInterest < settings.minOpenInterest) return null;
+        const spreadPct = (ask - metrics.bid) / ((ask + metrics.bid) / 2) * 100;
+        if (spreadPct > settings.maxSpreadPct || metrics.strikePct < settings.minStrikePct ||
+            metrics.strikePct > settings.maxStrikePct || metrics.annualReturn < settings.minAnnualReturn) return null;
         const candidate = {
-            id: symbol + '-' + optionType + '-' + option.expiryDate + '-' + strike.toFixed(2).replace('.', '_'),
-            symbol, optionType, strategy: optionType === 'call' ? '备兑卖 Call' : '现金担保卖 Put',
-            contractSymbol: option.contractSymbol, stockPrice, expiryDate: option.expiryDate,
-            daysToExpiry: days, strike, strikePct, bid, ask, spreadPct, openInterest, volume,
+            ...metrics,
+            id: symbol + '-' + option.optionType + '-' + option.expiryDate + '-' + metrics.strike.toFixed(2).replace('.', '_'),
+            symbol, optionType: option.optionType,
+            strategy: option.optionType === 'call' ? '备兑卖 Call' : '现金担保卖 Put',
+            contractSymbol: option.contractSymbol, expiryDate: option.expiryDate,
+            ask, spreadPct, openInterest, volume,
             impliedVolatility: numberOrNull(option.impliedVolatility), currency: 'USD',
             contractMultiplier: 100, multiplierStatus: ASSUMPTIONS.multiplierStatus,
-            premiumDollars, collateral, annualReturn, breakEven, downsideProtectionPct,
             lastTradeDate: option.lastTradeDate || null
         };
         candidate.localScore = calculateLocalScore(candidate, settings.riskProfile);
         return candidate;
+    }
+
+    function assessDataQuality(sources, asOf = new Date().toISOString()) {
+        const issues = [];
+        const maxAgeHours = 96;
+        const now = new Date(asOf).getTime();
+        const ids = new Set(sources.map(source => source.optionsSnapshotId).filter(Boolean));
+        if (ids.size > 1) issues.push('期权数据来自不同快照，请刷新后复核。');
+        const today = marketDate(asOf);
+        for (const source of sources) {
+            if (source.optionsMode === 'cached-preview') issues.push(source.symbol + ' 行情刷新失败，正在使用旧快照。');
+            for (const [label, value] of [['期权缓存', source.optionsGeneratedAt], ['股价抓取', source.stockRetrievedAt]]) {
+                const explicitZone = typeof value === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(value);
+                const age = explicitZone ? (now - new Date(value).getTime()) / 3600000 : NaN;
+                if (!Number.isFinite(age)) issues.push(source.symbol + ' ' + label + '时间不明。');
+                else if (age > maxAgeHours || age < -1) issues.push(source.symbol + ' ' + label + '时间过旧或异常。');
+            }
+            // Upstream timezone is unknown: compare calendar dates, never invent an offset.
+            for (const value of [source.stockSourceTimestamp, source.optionsSourceTimestamp]) {
+                const date = typeof value === 'string' ? value.slice(0, 10) : '';
+                const days = daysToExpiry(date, asOf, today);
+                if (days === null) issues.push(source.symbol + ' 源站行情时间不明。');
+                else if (days < -4 || days > 1) issues.push(source.symbol + ' 源站行情日期过旧或异常。');
+            }
+        }
+        return { status: issues.length ? 'warning' : 'ok', requiresConfirmation: issues.length > 0,
+            maxAgeHours, sourceTimeZone: null, issues: [...new Set(issues)] };
     }
 
     function scanSnapshots(snapshots, inputSettings, metadata = {}) {
@@ -172,6 +205,7 @@
                 optionsSourceTimestamp: optionsData?.sourceTimestamp || null,
                 optionsGeneratedAt: optionsData?.generatedAt || null,
                 optionsSnapshotId: optionsData?.snapshotId || null,
+                optionsMode: optionsData?.mode || null,
                 sourceTimeZone: null
             });
         }
@@ -191,7 +225,7 @@
             generatedAt: asOf, analysisDate, assumptions: ASSUMPTIONS,
             filters: settings, symbols: snapshots.map(snapshot => snapshot.symbol),
             status: errors.length === snapshots.length ? 'unavailable' : errors.length ? 'partial' : 'complete',
-            errors, sources, perSymbol,
+            errors, sources, perSymbol, dataQuality: assessDataQuality(sources, asOf),
             counts: { optionsRead: perSymbol.reduce((sum, item) => sum + item.optionCount, 0),
                 matchedBeforeSymbolLimit: allCandidates.length, retained: candidates.length,
                 excludedBySymbolLimit: allCandidates.length - candidates.length,
@@ -204,7 +238,7 @@
     // Only engine-owned data is serializable here; UI settings can contain API credentials.
     function exportScan(scan) {
         const keys = ['schemaVersion', 'snapshotId', 'scope', 'generatedAt', 'analysisDate', 'assumptions',
-            'symbols', 'status', 'errors', 'sources', 'perSymbol', 'counts', 'sort', 'candidates'];
+            'symbols', 'status', 'errors', 'sources', 'perSymbol', 'counts', 'sort', 'candidates', 'dataQuality'];
         const result = Object.fromEntries(keys.map(key => [key, scan[key]]));
         result.filters = normalizeSettings(scan.filters);
         result.shortlistIds = scan.shortlist.map(candidate => candidate.id);
@@ -213,5 +247,5 @@
 
     return Object.freeze({ WATCHLIST, SUPPORTED_SYMBOLS, SCHEMA_VERSION, SCORE_VERSION, DEFAULTS,
         ASSUMPTIONS, numberOrNull, normalizeSettings, marketDate, daysToExpiry, calculateLocalScore,
-        buildCandidate, scanSnapshots, exportScan });
+        optionMetrics, buildCandidate, scanSnapshots, exportScan, assessDataQuality });
 });

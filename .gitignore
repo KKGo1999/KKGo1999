@@ -1,5 +1,7 @@
 .DS_Store
 node_modules/
+dist/
+test-results/
 options/data/
 options/agent/index.html
 options/agent/fields.html

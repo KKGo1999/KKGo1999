@@ -1,12 +1,12 @@
 (function() {
     const analysis = window.OptionsAnalysis;
-    const STORAGE_KEY = 'kkgo1999.glmCodingPlanKey';
-    const SESSION_KEY = 'kkgo1999.glmCodingPlanSessionKey';
-    const HISTORY_KEY = 'kkgo1999.aiAnalysisHistory';
-    const GLM_BASE_URL = 'https://open.bigmodel.cn/api/coding/paas/v4';
-    const DEFAULT_GLM_MODEL = 'glm-5.3';
-    const MAX_HISTORY_ITEMS = 50;
-    const MAX_HISTORY_TEXT_LENGTH = 60000;
+    const providers = window.OptionsAI.PROVIDERS;
+    const historyStore = window.OptionsHistory.createStore();
+    let historyEntries = [];
+    let selectedProvider = 'glm';
+    const keyDrafts = { glm: '', openai: '' };
+    const modelDrafts = { glm: 'glm-5.3', openai: 'gpt-6.2-sol' };
+    let activeController = null;
     const DEFAULT_CANDIDATE_SORT = { column: 'rank', direction: 'asc' };
     const SETTING_INPUTS = {
         strategyType: 'aiStrategyType', riskProfile: 'aiRiskProfile',
@@ -77,9 +77,9 @@
     function getSettings() {
         return {
             ...analysis.normalizeSettings(Object.fromEntries(Object.entries(SETTING_INPUTS).map(([key, id]) => [key, $(id)?.value]))),
-            apiKey: String($('glmApiKey')?.value || '').trim(),
-            rememberKey: !!$('rememberGlmKey')?.checked,
-            model: DEFAULT_GLM_MODEL
+            apiKey: String($('aiApiKey')?.value || '').trim(),
+            provider: selectedProvider,
+            model: $('aiModel')?.value || modelDrafts[selectedProvider]
         };
     }
 
@@ -100,34 +100,71 @@
         });
     }
 
-    function persistKey(settings) {
-        if (!settings.apiKey) {
-            sessionStorage.removeItem(SESSION_KEY);
-            if (!settings.rememberKey) localStorage.removeItem(STORAGE_KEY);
-            return;
-        }
-
-        sessionStorage.setItem(SESSION_KEY, settings.apiKey);
-        if (settings.rememberKey) {
-            localStorage.setItem(STORAGE_KEY, settings.apiKey);
-        } else {
-            localStorage.removeItem(STORAGE_KEY);
-        }
+    function configureProvider() {
+        $('aiProvider').value = selectedProvider;
+        const provider = providers[selectedProvider];
+        $('aiApiKey').value = keyDrafts[selectedProvider];
+        $('aiKeyLabel').textContent = provider.label + ' API Key';
+        $('aiApiKey').placeholder = selectedProvider === 'glm' ? 'Coding Plan Key' : 'OpenAI API Key';
+        $('aiModelField').hidden = selectedProvider === 'glm';
+        $('aiModel').replaceChildren(...provider.models.map(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.label;
+            return option;
+        }));
+        $('aiModel').value = modelDrafts[selectedProvider];
     }
 
     function restoreKey() {
-        const savedKey = localStorage.getItem(STORAGE_KEY);
-        const sessionKey = sessionStorage.getItem(SESSION_KEY);
-        const keyInput = $('glmApiKey');
-        const rememberInput = $('rememberGlmKey');
-        if (!keyInput) return;
+        // Keep a formerly saved GLM key for this page only; remove persistent copies.
+        try {
+            keyDrafts.glm = localStorage.getItem('kkgo1999.glmCodingPlanKey') ||
+                sessionStorage.getItem('kkgo1999.glmCodingPlanSessionKey') || '';
+            localStorage.removeItem('kkgo1999.glmCodingPlanKey');
+            sessionStorage.removeItem('kkgo1999.glmCodingPlanSessionKey');
+        } catch {}
+        configureProvider();
+    }
 
-        if (savedKey) {
-            keyInput.value = savedKey;
-            if (rememberInput) rememberInput.checked = true;
-        } else if (sessionKey) {
-            keyInput.value = sessionKey;
-        }
+    function setBusy(busy) {
+        $('scanAiCandidates').disabled = busy;
+        $('runAiRecommendation').disabled = busy;
+        $('cancelAiAnalysis').hidden = !busy;
+    }
+
+    function beginRun() {
+        activeController?.abort();
+        activeController = new AbortController();
+        $('exportCurrentAi').hidden = true;
+        setBusy(true);
+        return ++activeRunId;
+    }
+
+    function cancelRun() {
+        activeController?.abort();
+        activeController = null;
+        ++activeRunId;
+        setBusy(false);
+    }
+
+    function downloadJson(value, filename) {
+        const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+
+    function renderDataQuality(scan) {
+        const quality = analysis.assessDataQuality(scan.sources, new Date().toISOString());
+        const lines = scan.sources.map(source => source.symbol + '：股价 ' + (source.stockSourceTimestamp || '未知') +
+            '；期权 ' + (source.optionsSourceTimestamp || '未知') + '；缓存生成 ' + (source.optionsGeneratedAt || '未知'));
+        const warnings = [...scan.errors, ...quality.issues];
+        return (warnings.length ? '<div class="alert alert-warning">' + escapeHtml(warnings.join(' ')) + '</div>' : '') +
+            '<details class="data-time-note"><summary>行情时间与来源</summary><p>源站时区未确认；生成时间不等于行情时间。</p>' +
+            '<ul>' + lines.map(line => '<li>' + escapeHtml(line) + '</li>').join('') + '</ul></details>';
     }
 
     function setStatus(text) {
@@ -156,11 +193,13 @@
         const symbols = getOverviewSymbols();
         const snapshots = [];
         const asOf = new Date().toISOString();
+        const signal = activeController.signal;
         for (let index = 0; index < symbols.length; index += 1) {
             if (runId !== activeRunId) return null;
             const symbol = symbols[index];
             setProgress(5 + (index / symbols.length) * 62, '扫描 ' + symbol + ' (' + (index + 1) + '/' + symbols.length + ')');
-            const results = await Promise.allSettled([api.getStockPrice(symbol), api.getOptionsData(symbol)]);
+            const results = await Promise.allSettled([api.getStockPrice(symbol, { signal, force: true }), api.getOptionsData(symbol, { signal, force: true })]);
+            if (runId !== activeRunId) return null;
             snapshots.push({
                 symbol,
                 quote: results[0].status === 'fulfilled' ? results[0].value : null,
@@ -184,54 +223,22 @@
         ].join(' / ');
     }
 
-    function compactCandidate(candidate) {
-        return {
-            id: candidate.id,
-            symbol: candidate.symbol,
-            strategy: candidate.strategy,
-            type: candidate.optionType,
-            expiryDate: candidate.expiryDate,
-            daysToExpiry: candidate.daysToExpiry,
-            strike: Number(candidate.strike.toFixed(2)),
-            stockPrice: Number(candidate.stockPrice.toFixed(2)),
-            strikePct: Number(candidate.strikePct.toFixed(2)),
-            bid: Number(candidate.bid.toFixed(2)),
-            ask: Number(candidate.ask.toFixed(2)),
-            spreadPct: Number(candidate.spreadPct.toFixed(1)),
-            openInterest: candidate.openInterest,
-            volume: candidate.volume,
-            annualReturn: Number(candidate.annualReturn.toFixed(2)),
-            breakEven: Number(candidate.breakEven.toFixed(2)),
-            downsideProtectionPct: Number(candidate.downsideProtectionPct.toFixed(2)),
-            localScore: Number(candidate.localScore.toFixed(2))
-        };
-    }
-
-    function getDeltaText(value) {
-        if (typeof value === 'string') return value;
-        if (Array.isArray(value)) {
-            return value.map(item => {
-                if (typeof item === 'string') return item;
-                return item?.text || item?.content || '';
-            }).join('');
-        }
-        return '';
-    }
-
-    function renderGlmStreamBlock(streamCapture = {}) {
-        const status = streamCapture.status || '等待智谱返回';
+    function renderAiStreamBlock(streamCapture = {}) {
+        const status = streamCapture.status || '等待模型返回';
+        const provider = providers[streamCapture.provider || selectedProvider];
+        const reasoningLabel = (streamCapture.provider || selectedProvider) === 'openai' ? '推理摘要' : 'Thinking 过程';
         const reasoning = streamCapture.reasoning || '';
         const content = streamCapture.content || '';
         return [
             '<div id="glmStreamBlock" class="glm-stream-block">',
             '<div class="glm-stream-header">',
-            '<strong>智谱流式返回</strong>',
+            '<strong>' + escapeHtml(provider?.label || 'AI') + ' / ' + escapeHtml(streamCapture.model || '') + '</strong>',
             `<span id="glmStreamStatus">${escapeHtml(status)}</span>`,
             '</div>',
             '<div class="glm-stream-grid">',
             '<section class="glm-stream-panel">',
-            '<h3>Thinking 过程</h3>',
-            `<pre id="glmThinkingText">${escapeHtml(reasoning || '等待 thinking 内容...')}</pre>`,
+            '<h3>' + reasoningLabel + '</h3>',
+            `<pre id="glmThinkingText">${escapeHtml(reasoning || (status === '接收完成' || status === '历史记录' ? '模型未提供推理摘要。' : '等待模型输出...'))}</pre>`,
             '</section>',
             '<section class="glm-stream-panel">',
             '<h3>结果文本</h3>',
@@ -242,7 +249,7 @@
         ].join('');
     }
 
-    function ensureGlmStreamBlock() {
+    function ensureAiStreamBlock(streamCapture) {
         let block = $('glmStreamBlock');
         if (block) return block;
 
@@ -250,22 +257,22 @@
         if (!output) return null;
         const summaryBlock = output.querySelector('.ai-summary-block');
         if (summaryBlock) {
-            summaryBlock.insertAdjacentHTML('afterend', renderGlmStreamBlock());
+            summaryBlock.insertAdjacentHTML('afterend', renderAiStreamBlock(streamCapture));
         } else {
-            output.insertAdjacentHTML('afterbegin', renderGlmStreamBlock());
+            output.insertAdjacentHTML('afterbegin', renderAiStreamBlock(streamCapture));
         }
         return $('glmStreamBlock');
     }
 
-    function updateGlmStreamBlock(streamCapture) {
-        ensureGlmStreamBlock();
+    function updateAiStreamBlock(streamCapture) {
+        ensureAiStreamBlock(streamCapture);
         const status = $('glmStreamStatus');
         const thinking = $('glmThinkingText');
         const result = $('glmResultText');
 
         if (status) status.textContent = streamCapture.status || '接收中';
         if (thinking) {
-            thinking.textContent = streamCapture.reasoning || '等待 thinking 内容...';
+            thinking.textContent = streamCapture.reasoning || (streamCapture.status === '接收完成' || streamCapture.status === '历史记录' ? '模型未提供推理摘要。' : '等待模型输出...');
             thinking.scrollTop = thinking.scrollHeight;
         }
         if (result) {
@@ -274,194 +281,15 @@
         }
     }
 
-    async function callGlm(settings, localScan, onStreamUpdate) {
-        const payload = {
-            task: '从美股卖方期权候选中推荐最近值得交易的 Top 10。请优先风险调整后收益、流动性、执行价安全垫和到期天数，避免只按回报率排序。',
-            outputSchema: {
-                summary: 'string',
-                top10: [
-                    {
-                        id: '候选 id，必须来自 candidates',
-                        rank: 'number',
-                        reason: '推荐原因，中文，控制在60字以内',
-                        risk: '主要风险，中文，控制在60字以内',
-                        confidence: '高|中|低'
-                    }
-                ],
-                notes: ['string']
-            },
-            settings: {
-                riskProfile: settings.riskProfile,
-                strategyType: settings.strategyType,
-                minDays: settings.minDays,
-                maxDays: settings.maxDays,
-                minBid: settings.minBid,
-                minAnnualReturn: settings.minAnnualReturn,
-                minStrikePct: settings.minStrikePct,
-                maxStrikePct: settings.maxStrikePct,
-                minOpenInterest: settings.minOpenInterest,
-                maxSpreadPct: settings.maxSpreadPct,
-                perSymbolLimit: settings.perSymbolLimit
-            },
-            candidates: localScan.shortlist.map(compactCandidate)
-        };
-
-        const response = await fetch(`${GLM_BASE_URL}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${settings.apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: settings.model,
-                temperature: 0.2,
-                max_tokens: 12000,
-                stream: true,
-                thinking: {
-                    type: 'enabled'
-                },
-                reasoning_effort: 'high',
-                messages: [
-                    {
-                        role: 'system',
-                        content: [
-                            '你是期权卖方交易候选筛选助手。',
-                            '只能使用用户提供的候选数据，不要编造行情、价格或外部新闻。',
-                            '输出必须是严格 JSON 对象，不要使用 Markdown。',
-                            '这不是投资建议，必须说明关键风险。'
-                        ].join('')
-                    },
-                    {
-                        role: 'user',
-                        content: JSON.stringify(payload)
-                    }
-                ]
-            })
-        });
-
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`GLM 请求失败: HTTP ${response.status} ${text.slice(0, 180)}`);
-        }
-        if (!response.body) {
-            throw new Error('当前浏览器不支持流式读取响应');
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        const streamCapture = {
-            reasoning: '',
-            content: '',
-            status: '接收中'
-        };
-        let buffer = '';
-        const handleSseLine = line => {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data:')) return;
-
-            const dataText = trimmed.slice(5).trim();
-            if (!dataText || dataText === '[DONE]') return;
-
-            let chunk;
-            try {
-                chunk = JSON.parse(dataText);
-            } catch (error) {
-                return;
-            }
-
-            const delta = chunk?.choices?.[0]?.delta || {};
-            const reasoningDelta = getDeltaText(delta.reasoning_content);
-            const contentDelta = getDeltaText(delta.content);
-
-            if (reasoningDelta) streamCapture.reasoning += reasoningDelta;
-            if (contentDelta) streamCapture.content += contentDelta;
-
-            if (reasoningDelta || contentDelta) {
-                onStreamUpdate?.({ ...streamCapture });
-            }
-        };
-
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split(/\r?\n/);
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                handleSseLine(line);
-            }
-        }
-        buffer += decoder.decode();
-        if (buffer.trim()) handleSseLine(buffer);
-
-        streamCapture.status = '接收完成';
-        onStreamUpdate?.({ ...streamCapture });
-
-        if (!streamCapture.content.trim()) {
-            throw new Error('GLM 流式响应缺少结果文本 content');
-        }
-
-        return {
-            aiResult: parseAiJson(streamCapture.content),
-            streamCapture
-        };
-    }
-
-    function parseAiJson(content) {
-        const trimmed = String(content).trim()
-            .replace(/^```json\s*/i, '')
-            .replace(/^```\s*/i, '')
-            .replace(/```$/i, '')
-            .trim();
-
-        try {
-            return JSON.parse(trimmed);
-        } catch (error) {
-            const start = trimmed.indexOf('{');
-            const end = trimmed.lastIndexOf('}');
-            if (start >= 0 && end > start) {
-                return JSON.parse(trimmed.slice(start, end + 1));
-            }
-            throw error;
-        }
-    }
-
     function normalizeAiRows(aiResult, localScan) {
         const byId = new Map(localScan.shortlist.map(candidate => [candidate.id, candidate]));
-        const rows = [];
-        const used = new Set();
-
-        if (Array.isArray(aiResult?.top10)) {
-            aiResult.top10.forEach((item, index) => {
-                const candidate = byId.get(item.id);
-                if (!candidate || used.has(candidate.id)) return;
-                used.add(candidate.id);
-                rows.push({
-                    rank: Number(item.rank) || rows.length + 1,
-                    candidate,
-                    reason: item.reason || '',
-                    risk: item.risk || '',
-                    confidence: item.confidence || '中'
-                });
-            });
+        if (aiResult) {
+            return aiResult.top10.map(item => ({ ...item, candidate: byId.get(item.id) }));
         }
-
-        localScan.shortlist.forEach(candidate => {
-            if (rows.length >= 10) return;
-            if (used.has(candidate.id)) return;
-            used.add(candidate.id);
-            rows.push({
-                rank: rows.length + 1,
-                candidate,
-                reason: '本地评分靠前，回报率、价差和安全垫相对均衡。',
-                risk: '需复核财报、消息面和盘中真实成交价。',
-                confidence: '中'
-            });
-        });
-
-        return rows.slice(0, 10).map((row, index) => ({ ...row, rank: index + 1 }));
+        return localScan.shortlist.slice(0, 10).map((candidate, index) => ({
+            rank: index + 1, candidate, reason: '本地评分结果，非 AI 推荐。',
+            risk: '需复核行情与风险。', confidence: '未评估'
+        }));
     }
 
     function renderRows(rows) {
@@ -516,15 +344,10 @@
         return Number.isFinite(number) ? Number(number.toFixed(digits)) : 0;
     }
 
-    function trimHistoryText(value) {
-        const text = String(value || '');
-        if (text.length <= MAX_HISTORY_TEXT_LENGTH) return text;
-        return `${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}\n\n...已截断，完整内容过长未全部保存...`;
-    }
-
     function serializeHistoryCandidate(candidate) {
         return {
             id: candidate.id,
+            contractSymbol: candidate.contractSymbol,
             symbol: candidate.symbol,
             strategy: candidate.strategy,
             optionType: candidate.optionType,
@@ -537,7 +360,7 @@
             ask: roundHistoryNumber(candidate.ask),
             spreadPct: roundHistoryNumber(candidate.spreadPct, 1),
             openInterest: Number(candidate.openInterest) || 0,
-            volume: Number(candidate.volume) || 0,
+            volume: candidate.volume ?? null,
             annualReturn: roundHistoryNumber(candidate.annualReturn),
             collateral: roundHistoryNumber(candidate.collateral, 0),
             breakEven: roundHistoryNumber(candidate.breakEven),
@@ -573,28 +396,23 @@
         };
     }
 
-    function getAiHistory() {
-        try {
-            const raw = localStorage.getItem(HISTORY_KEY);
-            if (!raw) return [];
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : [];
-        } catch (error) {
-            localStorage.removeItem(HISTORY_KEY);
-            return [];
-        }
+    function getAiHistory() { return historyEntries; }
+
+    async function refreshHistory() {
+        historyEntries = await historyStore.list();
+        updateHistoryButtonCount(historyEntries.length);
+        renderHistoryPanel();
     }
 
-    function setAiHistory(history) {
-        const trimmedHistory = history.slice(0, MAX_HISTORY_ITEMS);
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmedHistory));
-        updateHistoryButtonCount(trimmedHistory.length);
+    function historyError(error) {
+        $('aiHistoryStatus').textContent = '历史保存/读取失败：' + error.message + '。已有记录未删除，可导出当前结果备份。';
     }
 
     function formatHistoryTime(value) {
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return '--';
         return new Intl.DateTimeFormat('zh-CN', {
+            year: 'numeric',
             month: '2-digit',
             day: '2-digit',
             hour: '2-digit',
@@ -639,7 +457,8 @@
             return [
                 `<article class="ai-history-item${activeClass}">`,
                 '<div class="ai-history-main">',
-                `<div class="ai-history-title">版本 ${history.length - index} · ${escapeHtml(formatHistoryTime(entry.createdAt))}</div>`,
+                '<div class="ai-history-meta">' + escapeHtml((providers[entry.provider || 'glm']?.label || 'AI') + ' / ' + (entry.model || '未记录（旧版）')) + '</div>',
+                `<div class="ai-history-title">${escapeHtml(entry.id.slice(0, 8))} · ${escapeHtml(formatHistoryTime(entry.createdAt))}</div>`,
                 `<div class="ai-history-meta">${escapeHtml(symbols || '无股票')} · ${(entry.rows || []).length} 个推荐</div>`,
                 `<div class="ai-history-meta">${escapeHtml(formatHistorySettings(entry.settings))}</div>`,
                 '</div>',
@@ -652,40 +471,21 @@
         }).join('');
     }
 
-    function saveAiHistoryEntry(aiResult, localScan, settings, streamCapture) {
-        const rows = serializeHistoryRows(normalizeAiRows(aiResult, localScan));
+    async function saveAiHistoryEntry(aiResult, localScan, settings, streamCapture) {
         const entry = {
-            id: window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            createdAt: new Date().toISOString(),
-            summary: aiResult?.summary || '智谱已返回 Top 10 推荐。',
-            notes: Array.isArray(aiResult?.notes) ? aiResult.notes.slice(0, 3) : [],
-            settings: serializeHistorySettings(settings),
-            streamCapture: {
-                status: '历史记录',
-                reasoning: trimHistoryText(streamCapture?.reasoning || ''),
-                content: trimHistoryText(streamCapture?.content || '')
-            },
-            rows
+            id: crypto.randomUUID(), createdAt: new Date().toISOString(),
+            provider: settings.provider, model: settings.model, promptVersion: window.OptionsAI.PROMPT_VERSION,
+            summary: aiResult.summary, notes: aiResult.notes, settings: serializeHistorySettings(settings),
+            analysisData: analysis.exportScan(localScan), streamCapture: { ...streamCapture },
+            rows: serializeHistoryRows(normalizeAiRows(aiResult, localScan))
         };
-
-        const history = getAiHistory();
+        $('exportCurrentAi').hidden = false;
+        $('exportCurrentAi').onclick = () => downloadJson({ schemaVersion: 1, entries: [entry] }, 'options-ai-result.json');
         try {
-            setAiHistory([entry, ...history]);
-        } catch (error) {
-            entry.streamCapture = {
-                status: '历史记录',
-                reasoning: '',
-                content: '流式文本过长，历史记录仅保存推荐表格。'
-            };
-            try {
-                setAiHistory([entry, ...history]);
-            } catch (fallbackError) {
-                console.warn('保存 AI 分析历史失败', fallbackError);
-                return null;
-            }
-        }
-        renderHistoryPanel(entry.id);
-        return entry;
+            await historyStore.put(entry);
+            await refreshHistory();
+            $('aiHistoryStatus').textContent = '已保存到此浏览器。';
+        } catch (error) { historyError(error); }
     }
 
     function renderHistoryResult(entry) {
@@ -703,14 +503,17 @@
             `<p>${escapeHtml(formatHistorySettings(entry.settings))}</p>`,
             notesHtml,
             '</div>',
-            renderGlmStreamBlock(entry.streamCapture),
+            renderAiStreamBlock(entry.streamCapture),
             renderRows(entry.rows || [])
         ].join(''));
     }
 
     function viewHistoryEntry(id) {
+        cancelRun();
         const entry = getAiHistory().find(item => item.id === id);
         if (!entry) return;
+        $('exportCurrentAi').hidden = false;
+        $('exportCurrentAi').onclick = () => downloadJson({ schemaVersion: 1, entries: [entry] }, 'options-ai-result.json');
 
         const panel = $('aiHistoryPanel');
         if (panel) panel.hidden = false;
@@ -718,17 +521,15 @@
         renderHistoryResult(entry);
     }
 
-    function deleteHistoryEntry(id) {
-        const history = getAiHistory().filter(item => item.id !== id);
-        setAiHistory(history);
-        renderHistoryPanel();
+    async function deleteHistoryEntry(id) {
+        try { await historyStore.remove(id); await refreshHistory(); }
+        catch (error) { historyError(error); }
     }
 
-    function clearAiHistory() {
-        if (!window.confirm('确认清空所有 AI分析历史记录？')) return;
-        localStorage.removeItem(HISTORY_KEY);
-        updateHistoryButtonCount(0);
-        renderHistoryPanel();
+    async function clearAiHistory() {
+        if (!window.confirm('确认清空所有 AI 分析历史？建议先导出备份。')) return;
+        try { await historyStore.clear(); await refreshHistory(); }
+        catch (error) { historyError(error); }
     }
 
     function toggleHistoryPanel() {
@@ -874,6 +675,7 @@
 
         setOutput([
             errorHtml,
+            renderDataQuality(localScan),
             '<div class="ai-summary-block">',
             '<div class="ai-candidate-heading"><strong>候选扫描结果</strong>',
             '<div class="ai-export-actions">',
@@ -882,7 +684,7 @@
             '</div></div>',
             '<div id="aiExportStatus" role="status" aria-live="polite"></div>',
             `<p>共 ${localScan.candidates.length} 个候选。筛选条件：${escapeHtml(describeFilters(settings))}。</p>`,
-            `<p>扫描结果已限制每只股票最多保留本地评分前 ${settings.perSymbolLimit} 个；点击“AI分析 Top 10”会把其中前 ${localScan.shortlist.length} 个候选发送给智谱做总结和排序。</p>`,
+            `<p>扫描结果已限制每只股票最多保留本地评分前 ${settings.perSymbolLimit} 个；点击“AI分析 Top 10”会把其中前 ${localScan.shortlist.length} 个候选发送给所选模型做总结和排序。</p>`,
             '</div>',
             '<div class="ai-results-table-wrap">',
             '<table class="table table-sm table-hover align-middle sortable-table ai-results-table ai-candidate-table">',
@@ -941,9 +743,9 @@
     function renderResult(aiResult, localScan, glmFailedMessage = '', streamCapture = null) {
         const rows = normalizeAiRows(aiResult, localScan);
         const notes = Array.isArray(aiResult?.notes) ? aiResult.notes.slice(0, 3) : [];
-        const summary = aiResult?.summary || '已根据本地计算结果生成 Top 10 候选。';
+        const summary = aiResult?.summary || '以下为本地评分前 10，非 AI 推荐。';
         const errorBlock = glmFailedMessage
-            ? `<div class="alert alert-warning ai-warning">GLM 总结失败，已显示本地预筛结果：${escapeHtml(glmFailedMessage)}</div>`
+            ? `<div class="alert alert-warning ai-warning">AI 分析未完成，以下仅为本地预筛结果：${escapeHtml(glmFailedMessage)}</div>`
             : '';
         const notesHtml = notes.length
             ? `<ul class="ai-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join('')}</ul>`
@@ -951,30 +753,21 @@
 
         setOutput([
             errorBlock,
+            renderDataQuality(localScan),
             '<div class="ai-summary-block">',
             `<strong>总结</strong><p>${escapeHtml(summary)}</p>`,
             notesHtml,
             '</div>',
-            streamCapture ? renderGlmStreamBlock(streamCapture) : '',
+            streamCapture ? renderAiStreamBlock(streamCapture) : '',
             renderRows(rows)
         ].join(''));
     }
 
-    function renderLocalPreview(localScan) {
-        renderResult({
-            summary: `本地预筛得到 ${localScan.candidates.length} 个候选，等待 GLM 生成最终排序和理由。`,
-            top10: localScan.shortlist.slice(0, 10).map((candidate, index) => ({
-                id: candidate.id,
-                rank: index + 1
-            })),
-            notes: localScan.errors.length ? [`部分股票读取失败：${localScan.errors.slice(0, 3).join('；')}`] : []
-        }, localScan);
-    }
+    function renderLocalPreview(localScan) { renderResult(null, localScan); }
 
     async function runCandidateScan() {
         const settings = getSettings();
-        persistKey(settings);
-        const runId = ++activeRunId;
+        const runId = beginRun();
         setStatus('扫描中');
         setProgress(2, '准备扫描股票列表');
         setOutput('<div class="ai-empty-state">正在扫描本地期权缓存...</div>');
@@ -984,7 +777,7 @@
             if (!localScan || runId !== activeRunId) return;
 
             latestLocalScan = localScan;
-            latestCandidateSettings = settings;
+            latestCandidateSettings = analysis.normalizeSettings(settings);
             latestScanSignature = getScanSignature(settings);
             candidateSortConfig = { ...DEFAULT_CANDIDATE_SORT };
             setStatus(localScan.candidates.length ? '候选完成' : '无候选');
@@ -995,79 +788,72 @@
             setStatus('失败');
             setProgress(100, '扫描失败');
             setOutput(`<div class="ai-empty-state ai-empty-state-error">扫描失败：${escapeHtml(error.message)}</div>`);
+        } finally {
+            if (runId === activeRunId) setBusy(false);
         }
     }
 
     async function runRecommendation() {
         const settings = getSettings();
-        if (!settings.apiKey) {
-            setStatus('缺少 Key');
-            setOutput('<div class="ai-empty-state ai-empty-state-error">请先在页面顶部填写智谱 API Key。</div>');
-            return;
-        }
-
-        persistKey(settings);
-        const runId = ++activeRunId;
+        if (!settings.apiKey) { setStatus('缺少 Key'); $('aiApiKey').focus(); return; }
+        const runId = beginRun();
+        const signal = activeController.signal;
         const scanSignature = getScanSignature(settings);
         setStatus('准备分析');
-        setProgress(4, '检查本地候选列表');
-
         try {
             let localScan = latestLocalScan;
-            if (!localScan || latestScanSignature !== scanSignature) {
-                setStatus('扫描中');
-                setProgress(8, '筛选条件已变更，重新扫描候选');
-                setOutput('<div class="ai-empty-state">正在扫描本地期权缓存...</div>');
+            if (!localScan || latestScanSignature !== scanSignature ||
+                Date.now() - Date.parse(localScan.generatedAt) > 120000) {
                 localScan = await scanLocalCandidates(settings, runId);
                 if (!localScan || runId !== activeRunId) return;
                 latestLocalScan = localScan;
-                latestCandidateSettings = settings;
+                latestCandidateSettings = analysis.normalizeSettings(settings);
                 latestScanSignature = scanSignature;
             }
-
-            if (localScan.shortlist.length === 0) {
+            if (!localScan.shortlist.length) {
                 setStatus('无候选');
-                setProgress(100, '没有可发送给智谱的候选');
-                setOutput('<div class="ai-empty-state ai-empty-state-error">没有找到符合当前过滤条件的期权候选，请先放宽筛选条件并重新扫描。</div>');
+                renderCandidateList(localScan, settings);
                 return;
             }
-
-            setStatus('调用 GLM');
-            setProgress(72, `本地候选 ${localScan.candidates.length} 个，每股最多 ${settings.perSymbolLimit} 个，发送 ${localScan.shortlist.length} 个给智谱`);
+            const quality = analysis.assessDataQuality(localScan.sources);
+            localScan.dataQuality = quality;
+            const warnings = [...localScan.errors, ...quality.issues];
+            if (warnings.length && !window.confirm(warnings.join('\n') + '\n仍使用这些数据进行 AI 分析？')) {
+                setStatus('待复核数据');
+                renderCandidateList(localScan, settings);
+                return;
+            }
+            setStatus('分析中');
+            setProgress(72, '发送 ' + localScan.shortlist.length + ' 个候选至 ' + providers[settings.provider].label + ' / ' + settings.model);
             renderLocalPreview(localScan);
-            const streamCapture = {
-                reasoning: '',
-                content: '',
-                status: '等待智谱返回'
-            };
-            updateGlmStreamBlock(streamCapture);
-
-            let aiResult;
+            const streamCapture = { provider: settings.provider, model: settings.model, reasoning: '', content: '', status: '等待模型返回' };
+            updateAiStreamBlock(streamCapture);
             try {
-                const glmResponse = await callGlm(settings, localScan, update => {
-                    streamCapture.reasoning = update.reasoning;
-                    streamCapture.content = update.content;
-                    streamCapture.status = update.status;
-                    updateGlmStreamBlock(streamCapture);
+                const response = await window.OptionsAI.analyze(settings, localScan, {
+                    signal, onUpdate(update) {
+                        if (runId !== activeRunId) return;
+                        Object.assign(streamCapture, update);
+                        updateAiStreamBlock(streamCapture);
+                    }
                 });
                 if (runId !== activeRunId) return;
-                aiResult = glmResponse.aiResult;
-                saveAiHistoryEntry(aiResult, localScan, settings, glmResponse.streamCapture);
+                renderResult(response.aiResult, localScan, '', response.streamCapture);
                 setStatus('完成');
-                setProgress(100, 'AI 推荐已生成');
-                renderResult(aiResult, localScan, '', glmResponse.streamCapture);
-            } catch (glmError) {
+                setProgress(100, 'AI 返回 ' + response.aiResult.top10.length + ' 个推荐');
+                await saveAiHistoryEntry(response.aiResult, localScan, settings, response.streamCapture);
+            } catch (error) {
                 if (runId !== activeRunId) return;
+                streamCapture.status = '未完成';
+                renderResult(null, localScan, error.message, streamCapture);
                 setStatus('本地结果');
-                setProgress(100, 'GLM 调用失败，已显示本地预筛结果');
-                streamCapture.status = '调用失败';
-                renderResult(null, localScan, glmError.message, streamCapture);
+                setProgress(100, '模型分析未完成，未保存为 AI 推荐');
             }
         } catch (error) {
             if (runId !== activeRunId) return;
             setStatus('失败');
-            setProgress(100, '扫描失败');
-            setOutput(`<div class="ai-empty-state ai-empty-state-error">扫描失败：${escapeHtml(error.message)}</div>`);
+            setOutput('<div class="alert alert-warning">' + escapeHtml(error.message) + '</div>');
+        } finally {
+            if (runId === activeRunId) setBusy(false);
         }
     }
 
@@ -1143,15 +929,49 @@
             });
         }
 
-        const rememberInput = $('rememberGlmKey');
-        if (rememberInput) {
-            rememberInput.addEventListener('change', () => persistKey(getSettings()));
-        }
-
-        const keyInput = $('glmApiKey');
-        if (keyInput) {
-            keyInput.addEventListener('change', () => persistKey(getSettings()));
-        }
+        $('aiProvider').addEventListener('change', () => {
+            keyDrafts[selectedProvider] = $('aiApiKey').value;
+            modelDrafts[selectedProvider] = $('aiModel').value;
+            cancelRun();
+            selectedProvider = $('aiProvider').value;
+            configureProvider();
+            setStatus('服务商已切换');
+            if (latestLocalScan) renderCandidateList(latestLocalScan, getSettings());
+        });
+        $('aiModel').addEventListener('change', () => {
+            cancelRun();
+            modelDrafts[selectedProvider] = $('aiModel').value;
+            setStatus('模型已切换');
+            if (latestLocalScan) renderCandidateList(latestLocalScan, getSettings());
+        });
+        $('clearAiKey').addEventListener('click', () => {
+            cancelRun();
+            keyDrafts.glm = keyDrafts.openai = '';
+            $('aiApiKey').value = '';
+            setStatus('密钥已清除');
+        });
+        $('cancelAiAnalysis').addEventListener('click', () => {
+            cancelRun();
+            setStatus('已取消');
+            setProgress(100, '已停止当前请求；已产生的 API 用量仍可能计费');
+            if (latestLocalScan) renderCandidateList(latestLocalScan, getSettings());
+        });
+        $('exportAiHistory').addEventListener('click', async () => {
+            try { downloadJson({ schemaVersion: 1, entries: await historyStore.list() }, 'options-ai-history.json'); }
+            catch (error) { historyError(error); }
+        });
+        $('importAiHistory').addEventListener('click', () => $('aiHistoryFile').click());
+        $('aiHistoryFile').addEventListener('change', async event => {
+            const file = event.target.files[0];
+            if (!file) return;
+            try {
+                if (file.size > 50 * 1024 * 1024) throw new Error('备份文件超过 50 MB');
+                await historyStore.importFile(await file.text());
+                await refreshHistory();
+                $('aiHistoryStatus').textContent = '备份已合并，重复版本未覆盖。';
+            } catch (error) { historyError(error); }
+            finally { event.target.value = ''; }
+        });
 
         const output = $('aiRecommendationOutput');
         if (output) {
@@ -1179,13 +999,12 @@
         }
         restoreKey();
         bindEvents();
-        updateHistoryButtonCount();
+        refreshHistory().catch(historyError);
     }
 
     window.aiRecommendations = {
         run: runRecommendation,
         scan: runCandidateScan,
-        getSettings,
         getOverviewSymbols,
         getScanExport: () => latestLocalScan ? analysis.exportScan(latestLocalScan) : null
     };

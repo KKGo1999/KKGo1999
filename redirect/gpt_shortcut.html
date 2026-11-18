@@ -19,23 +19,6 @@
 <h1><a href="https://www.icloud.com/shortcuts/8a374348758d4ef696cb624c2c1900fc">打开AI小助手</a></h1>
 <h1>自动跳转中...</h1>
 
-<script>
-// auto-theme
-if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-  document.querySelector('link[href="light.css"]').disabled = true;
-} else {
-  document.querySelector('link[href="dark.css"]').disabled = true;
-}
 
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-  if (e.matches) {
-    document.querySelector('link[href="light.css"]').disabled = true;
-    document.querySelector('link[href="dark.css"]').disabled = false;
-  } else {
-    document.querySelector('link[href="dark.css"]').disabled = true;
-    document.querySelector('link[href="light.css"]').disabled = false;
-  }
-});
-</script>
 </body>
 </html>

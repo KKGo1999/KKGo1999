@@ -43,18 +43,42 @@ jobs:
       - name: Install build dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Test options data and Agent exports
-        run: node --test scripts/test-options-agent.js
-      - name: Build delayed options data and Agent pages
-        run: node scripts/build-options-data.js
-      - name: Remove build-only dependencies before publishing
-        run: npm prune --omit=dev --ignore-scripts --no-audit --no-fund
+        run: npm test
+      - name: Install test browsers
+        if: github.event_name != 'schedule'
+        run: npx playwright install --with-deps chromium webkit
+      - name: Test browser flows before publishing code
+        if: github.event_name != 'schedule'
+        run: npm run test:browser
+      - name: Restore last successful market snapshot
+        uses: actions/cache/restore@v5
+        with:
+          path: options/data
+          key: options-snapshot-v1-${{ github.run_id }}
+          restore-keys: options-snapshot-v1-
+      - name: Refresh delayed options data
+        id: refresh
+        continue-on-error: true
+        timeout-minutes: 7
+        run: npm run build:data
+      - name: Cache successful snapshot
+        if: steps.refresh.outcome == 'success'
+        uses: actions/cache/save@v5
+        with:
+          path: options/data
+          key: options-snapshot-v1-${{ github.run_id }}
+      - name: Package fresh data
+        if: steps.refresh.outcome == 'success'
+        run: npm run build
+      - name: Package explicitly marked cached data
+        if: steps.refresh.outcome != 'success'
+        run: npm run build -- --cached
       - name: Setup Pages
         uses: actions/configure-pages@v6
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          # Upload entire repository
-          path: '.'
+          path: 'dist'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5

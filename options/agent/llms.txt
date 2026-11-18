@@ -20,3 +20,5 @@ The default scan uses only symbols with inWatchlist=true. AAPL and NVDA are supp
 Browser exports have scope=browser-scan and capture that user's scan settings at scan time. Public data has scope=published-default and uses the published defaults. Changing a browser filter does not change public files. Browser-only API keys and AI history are not public resources.
 
 Source times without a timezone are preserved verbatim with sourceTimeZone=null. Missing values are null, never zero. Report unavailable symbols and quote age uncertainty; do not silently treat partial scans as complete. Local scores are ranking heuristics, not probabilities.
+
+Read dataQuality. If requiresConfirmation=true or mode=cached-preview, disclose the warnings before recommending candidates. A cached fallback retains its original timestamps and is not a fresh snapshot. The 96-hour warning threshold does not guarantee that newer quotes are suitable for trading.

@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>期权分析</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://qt.gtimg.cn https://web.ifzq.gtimg.cn https://open.bigmodel.cn https://api.openai.com; base-uri 'self'; form-action 'none'; object-src 'none'">
     <link rel="alternate" type="application/json" href="data/stocks.json" title="股票数据">
     <link rel="describedby" type="text/plain" href="agent/llms.txt">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260906-1">
+    <link rel="stylesheet" href="vendor/bootstrap-5.3.0.min.css">
+    <link rel="stylesheet" href="styles.css?v=20261118-1">
     <link rel="icon" type="image/png" href="/img/favicon.png">
     <link rel="apple-touch-icon" href="/img/favicon.png"/>
 </head>
@@ -17,24 +18,33 @@
         <header class="page-header">
             <h1 class="page-title">期权分析</h1>
             <div class="page-header-controls">
+                <div class="ai-provider-field">
+                    <label for="aiProvider">服务商</label>
+                    <select id="aiProvider" class="form-select form-select-sm">
+                        <option value="glm">智谱</option>
+                        <option value="openai">OpenAI</option>
+                    </select>
+                </div>
+                <div class="ai-provider-field" id="aiModelField" hidden>
+                    <label for="aiModel">模型</label>
+                    <select id="aiModel" class="form-select form-select-sm"></select>
+                </div>
                 <div class="header-api-key">
-                    <label for="glmApiKey">智谱 API Key</label>
-                    <input type="password" id="glmApiKey" class="form-control form-control-sm" autocomplete="off" placeholder="填入 Coding Plan Key">
-                    <div class="form-check header-save-key">
-                        <input class="form-check-input" type="checkbox" id="rememberGlmKey">
-                        <label class="form-check-label" for="rememberGlmKey">保存到本机</label>
+                    <label id="aiKeyLabel" for="aiApiKey">智谱 API Key</label>
+                    <div class="ai-key-input">
+                        <input type="password" id="aiApiKey" class="form-control form-control-sm" autocomplete="off" spellcheck="false" placeholder="Coding Plan Key">
+                        <button type="button" id="clearAiKey" class="btn btn-sm btn-outline-secondary">清除</button>
                     </div>
                 </div>
-                <div class="theme-switch-wrapper">
-                    <span class="me-2">🌞</span>
-                    <label class="theme-switch" for="theme-toggle">
-                        <input type="checkbox" id="theme-toggle" />
-                        <span class="slider"></span>
-                    </label>
-                    <span class="ms-2">🌙</span>
-                </div>
+            </div>
+            <div class="theme-switch-wrapper">
+                <label class="theme-switch" for="theme-toggle">
+                    <input type="checkbox" id="theme-toggle" aria-label="暗黑模式">
+                    <span class="slider"></span>
+                </label>
             </div>
         </header>
+        <p class="key-security-note">密钥仅保留在当前页面，刷新后清除。浏览器直连存在密钥暴露风险；API 调用可能产生费用。</p>
 
         <!-- 股票价格概览 -->
         <div class="row mb-4" id="stockPriceOverview">
@@ -135,6 +145,8 @@
                 <div class="ai-actions-row">
                     <button id="scanAiCandidates" class="btn btn-outline-primary btn-sm">扫描候选</button>
                     <button id="runAiRecommendation" class="btn btn-primary btn-sm">AI分析 Top 10</button>
+                    <button id="cancelAiAnalysis" class="btn btn-outline-danger btn-sm" hidden>取消</button>
+                    <button id="exportCurrentAi" class="btn btn-outline-secondary btn-sm" hidden>导出本次 AI 结果</button>
                     <button id="toggleAiHistory" class="btn btn-outline-secondary btn-sm">历史记录</button>
                 </div>
 
@@ -147,10 +159,16 @@
                 <div id="aiRecommendationProgressText">等待开始</div>
                 </div>
 
+                <p id="aiHistoryStatus" role="status" class="data-time-note">历史只保存在此浏览器，清理网站数据会丢失，请定期导出备份。</p>
                 <div id="aiHistoryPanel" class="ai-history-panel" hidden>
                     <div class="ai-history-header">
                         <strong>AI分析历史</strong>
-                        <button id="clearAiHistory" class="btn btn-outline-danger btn-sm">清空历史</button>
+                        <div class="ai-history-actions">
+                            <button id="exportAiHistory" class="btn btn-outline-secondary btn-sm">导出备份</button>
+                            <button id="importAiHistory" class="btn btn-outline-secondary btn-sm">导入备份</button>
+                            <button id="clearAiHistory" class="btn btn-outline-danger btn-sm">清空历史</button>
+                            <input id="aiHistoryFile" type="file" accept=".json,application/json" hidden>
+                        </div>
                     </div>
                     <div id="aiHistoryContent" class="ai-history-content">
                         <div class="ai-empty-state">暂无历史记录。</div>
@@ -180,6 +198,7 @@
                                 <div class="stock-info mt-3">
                                     <div id="currentPrice" class="h4">当前价格: --</div>
                                     <div id="priceChange" class="h6">涨跌幅: --</div>
+                                    <p id="stockDataStatus" class="data-time-note"></p>
                                 </div>
                             </div>
                         </div>
@@ -283,15 +302,13 @@
         </footer>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mathjs@11.8.0/lib/browser/math.min.js"></script>
-    <script src="analysisCore.js?v=20260906-1"></script>
-    <script src="apiService.js?v=20260906-1"></script>
-    <script src="optionsCalculator.js?v=20260619-3"></script>
-    <script src="optionStrategies.js?v=20260619-3"></script>
-    <script src="app.js?v=20260906-1"></script>
-    <script src="advancedAnalysisFix.js?v=20260620-7"></script>
-    <script src="aiRecommendations.js?v=20260906-1"></script>
+    <script src="asyncControl.js?v=20261118-1"></script>
+    <script src="aiProviders.js?v=20261118-1"></script>
+    <script src="historyStore.js?v=20261118-1"></script>
+    <script src="analysisCore.js?v=20261118-1"></script>
+    <script src="apiService.js?v=20261118-1"></script>
+    <script src="app.js?v=20261118-1"></script>
+    <script src="advancedAnalysisFix.js?v=20261118-1"></script>
+    <script src="aiRecommendations.js?v=20261118-1"></script>
 </body>
 </html>

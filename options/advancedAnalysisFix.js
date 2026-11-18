@@ -1,20 +1,7 @@
 (function() {
-    let analysisRunId = 0;
+    const analysis = window.OptionsAnalysis;
+    const gate = window.OptionsAsync.createRequestGate();
     let autoAnalysisTimer = null;
-
-    function getValidExpiryDates(expirySelect) {
-        if (!expirySelect) return [];
-
-        const today = new Date();
-        return Array.from(expirySelect.options)
-            .map(option => option.value)
-            .filter(Boolean)
-            .filter(dateStr => {
-                const expiry = new Date(dateStr);
-                const diff = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-                return diff >= 14 && diff <= 365;
-            });
-    }
 
     function getElements() {
         return {
@@ -52,29 +39,10 @@
         return optionType === 'call' ? 'CALL' : 'PUT';
     }
 
-    function delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    async function waitForValidExpiryDates(expirySelect, timeoutMs = 10000) {
-        const start = Date.now();
-
-        while (Date.now() - start < timeoutMs) {
-            const validDates = getValidExpiryDates(expirySelect);
-            if (validDates.length > 0) return validDates;
-
-            const statusText = expirySelect && expirySelect.options[0] ? expirySelect.options[0].textContent : '';
-            if (/失败|无可用/.test(statusText)) return [];
-            await delay(100);
-        }
-
-        return getValidExpiryDates(expirySelect);
-    }
-
     function showSection(elements, symbol, optionType, validDates, loadingText = '正在加载期权链数据...') {
         elements.section.classList.remove('d-none');
         setText(elements.title, `${symbol.toUpperCase()} 卖方回报率矩阵`);
-        setText(elements.subtitle, `${formatOptionType(optionType)} | 14-365天到期 | 年化回报率`);
+        setText(elements.subtitle, `${formatOptionType(optionType)} | 14-365天到期 | 权利金简单年化`);
         setText(elements.progress, validDates.length > 0 ? `0/${validDates.length}` : '准备中');
         setMetric(elements, 'symbol', symbol.toUpperCase());
         setMetric(elements, 'type', formatOptionType(optionType));
@@ -226,97 +194,56 @@
     }
 
     async function openAdvancedAnalysis(event, options = {}) {
-        if (event) {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-        }
-
-        const stockSelect = document.getElementById('stockSelect');
-        const expirySelect = document.getElementById('expirySelect');
-        const callOption = document.getElementById('callOption');
-        const symbol = stockSelect ? stockSelect.value.trim() : '';
-        const silent = options.silent === true;
-
-        if (!symbol) {
-            if (!silent) alert('请先选择股票代码');
-            return;
-        }
-
+        event?.preventDefault();
+        const symbol = document.getElementById('stockSelect').value.trim().toUpperCase();
         const elements = getElements();
-        if (!elements.section || !elements.content) {
-            console.error('高级分析结果区域不存在');
-            return;
-        }
-
-        const runId = ++analysisRunId;
-        const optionType = callOption && callOption.checked ? 'call' : 'put';
-
-        let validDates = getValidExpiryDates(expirySelect);
-        if (options.waitForDates && validDates.length === 0) {
-            showSection(elements, symbol, optionType, [], '正在读取可用到期日...');
-            validDates = await waitForValidExpiryDates(expirySelect);
-            if (runId !== analysisRunId) return;
-        }
-
-        if (validDates.length === 0) {
-            if (!silent) alert('没有14至365天之间的有效到期日');
-            elements.section.classList.remove('d-none');
-            setText(elements.title, `${symbol.toUpperCase()} 卖方回报率矩阵`);
-            setText(elements.subtitle, `${formatOptionType(optionType)} | 14-365天到期 | 年化回报率`);
-            setText(elements.progress, '无到期日');
-            elements.content.innerHTML = '<div class="advanced-empty-state">没有14至365天之间的有效到期日。</div>';
-            return;
-        }
-
-        showSection(elements, symbol, optionType, validDates);
-
+        if (!symbol) return;
+        const run = gate.start();
+        const optionType = document.getElementById('callOption').checked ? 'call' : 'put';
+        showSection(elements, symbol, optionType, []);
         try {
-            const apiService = window.apiService || new APIService();
-            const today = new Date();
-            const stockData = await apiService.getStockPrice(symbol);
-            if (runId !== analysisRunId) return;
-            const stockPrice = stockData.price;
+            let state = window.optionsStockState;
+            if (options.force || !state || state.symbol !== symbol) {
+                const [quote, optionsData] = await Promise.all([
+                    window.apiService.getStockPrice(symbol, { signal: run.signal, force: !!options.force }),
+                    window.apiService.getOptionsData(symbol, { signal: run.signal, force: !!options.force })
+                ]);
+                state = { symbol, quote, optionsData };
+            }
+            if (!gate.current(run) || symbol !== document.getElementById('stockSelect').value.trim().toUpperCase()) return;
+            const asOf = new Date().toISOString();
+            const source = {
+                symbol, stockRetrievedAt: state.quote.retrievedAt, stockSourceTimestamp: state.quote.sourceTimestamp,
+                optionsGeneratedAt: state.optionsData.generatedAt, optionsSnapshotId: state.optionsData.snapshotId,
+                optionsSourceTimestamp: state.optionsData.sourceTimestamp, optionsMode: state.optionsData.mode
+            };
+            const quality = analysis.assessDataQuality([source], asOf);
+            const validDates = [...new Set(state.optionsData.options.map(option => option.expiryDate))]
+                .filter(date => {
+                    const days = analysis.daysToExpiry(date, asOf);
+                    return days >= 14 && days <= 365;
+                }).sort();
             const matrix = {};
             const bidMatrix = {};
-
-            for (let idx = 0; idx < validDates.length; idx += 1) {
-                const expiry = validDates[idx];
-                try {
-                    const chain = await apiService.getOptionsChain(symbol, expiry, optionType);
-                    if (runId !== analysisRunId) return;
-                    const expiryDateObj = new Date(expiry);
-                    const daysToExpiry = Math.max(1, Math.ceil((expiryDateObj - today) / (1000 * 60 * 60 * 24)));
-
-                    chain.forEach(option => {
-                        const bid = option.bid || 0;
-                        if (bid === 0) return;
-
-                        const premium = bid * 100 - 1.0;
-                        const collateral = optionType === 'put' ? option.strike * 100 : stockPrice * 100;
-                        const annualReturn = (premium / collateral) * (365 / daysToExpiry) * 100;
-
-                        if (!bidMatrix[option.strike]) bidMatrix[option.strike] = {};
-                        bidMatrix[option.strike][expiry] = bid;
-
-                        if (!matrix[option.strike]) matrix[option.strike] = {};
-                        matrix[option.strike][expiry] = annualReturn;
-                    });
-                } catch (error) {
-                    console.error('获取期权链失败', symbol, expiry, error);
-                }
-
-                const pct = (((idx + 1) / validDates.length) * 100).toFixed(0);
-                setText(elements.progress, `${idx + 1}/${validDates.length} (${pct}%)`);
+            for (const option of state.optionsData.options) {
+                if (option.optionType !== optionType || !validDates.includes(option.expiryDate)) continue;
+                const metrics = analysis.optionMetrics(symbol, state.quote.price, option, asOf);
+                if (!metrics) continue;
+                if (!matrix[option.strike]) { matrix[option.strike] = {}; bidMatrix[option.strike] = {}; }
+                matrix[option.strike][option.expiryDate] = metrics.annualReturn;
+                bidMatrix[option.strike][option.expiryDate] = metrics.bid;
             }
-
-            if (runId !== analysisRunId) return;
-            renderMatrix(elements, symbol, optionType, validDates, stockPrice, matrix, bidMatrix);
+            renderMatrix(elements, symbol, optionType, validDates, state.quote.price, matrix, bidMatrix);
+            const note = document.createElement('p');
+            note.className = quality.requiresConfirmation ? 'alert alert-warning' : 'data-time-note';
+            note.textContent = '股票行情 ' + (source.stockSourceTimestamp || '未知') + '；期权行情 ' +
+                (source.optionsSourceTimestamp || '未知') + '；缓存生成 ' + (source.optionsGeneratedAt || '未知') +
+                '。源站时区未确认；权利金简单年化不等于总收益。' + quality.issues.join(' ');
+            elements.content.prepend(note);
         } catch (error) {
-            if (runId !== analysisRunId) return;
-            console.error('高级分析失败:', error);
+            if (!gate.current(run)) return;
             setText(elements.progress, '加载失败');
-            elements.content.innerHTML = '<div class="advanced-empty-state advanced-empty-state-error"></div>';
-            elements.content.querySelector('.advanced-empty-state-error').textContent = `分析过程中发生错误: ${error.message}`;
+            elements.content.textContent = '分析失败：' + error.message;
         }
     }
 
@@ -327,7 +254,7 @@
 
         window.clearTimeout(autoAnalysisTimer);
         autoAnalysisTimer = window.setTimeout(() => {
-            openAdvancedAnalysis(null, { silent: true, waitForDates: true });
+            openAdvancedAnalysis(null);
         }, 250);
     }
 
@@ -339,10 +266,15 @@
         const elements = getElements();
 
         if (button) {
-            button.addEventListener('click', event => openAdvancedAnalysis(event, { waitForDates: true }), true);
+            button.addEventListener('click', event => openAdvancedAnalysis(event, { force: true }));
         }
 
         document.addEventListener('stockDataLoaded', scheduleAutomaticAnalysis);
+        document.addEventListener('stockSelectionChanged', () => {
+            gate.cancel();
+            clearTimeout(autoAnalysisTimer);
+            elements.section.classList.add('d-none');
+        });
 
         [callOption, putOption].forEach(input => {
             if (input) input.addEventListener('change', scheduleAutomaticAnalysis);

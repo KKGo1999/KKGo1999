@@ -1,92 +1,67 @@
-# 期权分析工具
+# 期权分析
 
-一个功能强大的期权分析工具，使用HTML、JavaScript和CSS实现，可以分析期权价格、希腊字母指标以及复杂的期权组合策略。
+纯静态网页：股票概览、卖方权利金矩阵、候选筛选、AI 分析和浏览器本地历史。无需后端，不提供交易下单。
 
-## 功能特点
+## 本地运行
 
-- **期权链分析**：查看不同到期日和执行价的期权价格、隐含波动率和希腊字母
-- **复杂策略分析**：支持多种期权组合策略
-  - 垂直价差 (牛市看涨价差、熊市看跌价差等)
-  - 铁鹰策略 (Iron Condor)
-  - 蝶式策略 (Butterfly Spread)
-  - 跨式策略 (Straddle)
-- **数据源支持**：
-  - 腾讯财经免费公开行情接口（无需 API Key）
-  - 部署时生成的 Cboe 延迟期权链静态缓存（无需 API Key）
-
-
-## 设置指南
-
-### Agent 数据入口
-
-从项目根目录执行：
+需要 Node.js 24+；行情构建需要访问腾讯财经和 Cboe。
 
 ```sh
 npm ci --ignore-scripts --no-audit --no-fund
-node --test scripts/test-options-agent.js
-node scripts/build-options-data.js
-python3 -m http.server 8766 --bind 127.0.0.1
+npm test
+npx playwright install chromium webkit
+npm run test:browser
+npm run build:data
+npm run build
+python3 -m http.server 8766 --bind 127.0.0.1 --directory dist
 ```
 
-访问 http://127.0.0.1:8766/options/agent/ 可读取无需 JavaScript 的股票、默认候选和期权分页；主页面底部也提供入口。构建需要 Node.js 24+ 及腾讯、Cboe 的网络访问。
+访问 http://127.0.0.1:8766/options/ 。不要通过 file:// 打开，页面需要同源 HTTP 数据。浏览器测试使用固定行情和模拟模型，不需要密钥、不产生 API 费用。它验证 Chromium 和 WebKit，不替代实体手机测试。
 
-股票清单、默认参数和筛选评分共用 options/analysisCore.js。只需修改其中 WATCHLIST / SUPPORTED_SYMBOLS，再重新构建；页面概览、扫描和 Agent 目录会使用同一清单。
+## 使用流程
 
-构建会生成 options/data/ 和 options/agent/ 下的 index.html、stocks/、fields.html、fields.txt，这些产物不提交 Git，GitHub Actions 测试通过后重新生成并随站点部署。个别股票失败会保留失败记录；全部期权获取失败则阻止本次发布。
+- 选择股票自动显示矩阵；股票切换会取消旧请求，矩阵和扫描共用日期及收益公式。
+- “扫描候选”不调用 AI。默认 Put、30–200 天、买价至少 $1、简单年化至少 20%、执行价相对差 -60% 至 -15%、每股最多 3 个候选。
+- “AI分析 Top 10”发送本地评分靠前的候选，上限可设置。显示返回文字和推理内容；OpenAI 仅展示 API 提供的推理摘要，不是完整内部推理。
+- AI 只能引用已发送候选；不足 10 个不会本地补齐。返回无效、被截断或请求失败时只显示明确标注的本地结果，不保存为成功推荐。
+- 取消、切换服务商或模型会中止旧请求。中止前的 API 用量仍可能计费。
 
-主页面扫描后可“复制分析数据”或“下载 JSON”。导出保存扫描时的条件及结果，不包含 API Key、AI History；公开默认候选不会随着本机输入框的修改而变化。字段、公式、时间口径和分页规则见 [Agent 数据说明](https://www.kkgo1999.top/options/agent/fields.html)。
+## AI 服务商与密钥
 
-字段说明仅维护 [fields.md 源文件](agent/fields.md)，构建时通过 Marked 生成完整的静态 HTML，并原样复制为 text/plain 的 fields.txt。Agent 优先读取 fields.html，遇到读取工具格式兼容问题时改读 fields.txt，无需依赖 text/markdown 或执行 JavaScript。
+- 智谱：中国 Coding Plan，固定模型 glm-5.3，固定官方 Coding API 地址。
+- OpenAI：Responses API，仅 GPT-6.2 Sol（默认）和 GPT-6.2 Astra；不提供 Terra / Luna。使用推理 medium、流式响应和结构化输出。模型权限取决于 API 项目和账户。
+- 模型配置核对日期：2026-11-18。参见 [Sol](https://developers.openai.com/api/docs/models/gpt-6.2-sol) 和 [Astra](https://developers.openai.com/api/docs/models/gpt-6.2-astra)。
 
-### 1. 免费数据源
+密钥只放在当前页面内存中；刷新清除，不写入 localStorage、sessionStorage、历史、导出或公共文件。两个服务商的临时密钥独立，点击“清除”会同时清除。旧版保存在浏览器的智谱密钥会迁移到本次页面内存，并删除旧持久副本。
 
-应用默认从腾讯财经免费公开接口抓取美股报价，并在 GitHub Pages 部署时从 Cboe 延迟行情生成期权链静态 JSON，不需要 Tradier 账户或 API Key。浏览器读取同源缓存文件，避免直接请求第三方期权接口时遇到 CORS 或代理连接失败。
+浏览器直连并不能提供服务端级密钥隔离；浏览器扩展、同源恶意代码、共享设备仍有风险。页面只加载本站脚本，以 CSP 限制连接地址，不使用第三方 AI 代理。建议使用单独项目密钥、限制额度并及时轮换。网络/CORS、账号权限、地区限制、额度不足会明确报错；不自动重试收费请求。
 
-> 注意：腾讯财经和 Cboe 延迟行情都不是本项目可控的官方 SLA 数据服务，接口可用性、延迟和字段完整度可能变化；如果用于真实交易，请自行核验行情来源。
+## 数据与收益口径
 
-### 2. 运行应用程序
+股价来自腾讯财经；期权链来自部署时构建的 Cboe 延迟快照。两者时间可能不同，不是实时可成交报价。
 
-本应用是纯前端项目，无需复杂的设置：
+- 日期按 America/New_York 的日历日计算，矩阵与扫描使用同一个 analysisCore.js。
+- 采用标准 100 股/张、每张 $1 费用假设；非标准根代码和调整合约不进入分析。
+- 年化仅是权利金简单年化，不包含股票损益、股息、交割等，不等于备兑 Call 总收益或盈利概率。
+- 展示行情原始时间、抓取时间及快照生成时间；源站时区未确认，不擅自视作 UTC。
+- 缓存/抓取时间超过 96 小时、缺少时间、异常未来时间、旧缓存模式、混合快照或部分股票失败时，AI 分析前须确认。96 小时只是保守提示阈值，不表示阈值内行情适合交易。
 
-1. 确保所有文件都在同一个目录下
-2. 在浏览器中直接打开`index.html`文件
-3. 或者使用简单的HTTP服务器（如VS Code的Live Server扩展）来托管项目
+## 历史与备份
 
-## 使用说明
+完整成功结果写入 IndexedDB：保留模型、提示词版本、输入快照、筛选条件、推荐和返回文字。没有自动删除第 50 条或截断 60,000 字的限制，但仍受浏览器容量约束。旧版 localStorage 历史成功迁移后才删除旧副本。
 
-### 期权链分析
+“历史记录”支持查看、删除、导出和导入；重复 ID 不覆盖。导入会校验数据并剔除密钥字段，单文件最多 50 MB。写入失败时保留当前结果并显示错误，可用“导出本次 AI 结果”备份。清理网站数据、无痕模式或更换浏览器可能丢失记录，请定期导出。历史按域名隔离，本地预览与线上网站不共享。
 
-1. 在"期权链分析"选项卡中，选择一个股票符号（例如TSLA、NVDA等）
-2. 选择期权到期日
-3. 选择期权类型（看涨或看跌）
-4. 期权链表格将显示不同执行价的期权详细信息
-5. 点击任意期权行，在下方查看详细图表分析
+## Agent 与构建
 
-### API密钥配置
+入口为 /options/agent/，无需 JavaScript。JSON 清单、期权分页和字段说明见 [agent/fields.md](agent/fields.md)，构建生成同内容的 fields.html 和 fields.txt。公开数据不包含密钥或 AI 历史。
 
-无需配置 API 密钥。页面右上角会显示当前使用的免费数据源。
+股票清单与计算规则维护在 analysisCore.js；页面、扫描与构建共用。aiProviders.js 负责模型协议，historyStore.js 负责存储，asyncControl.js 负责请求取消。旧 optionsCalculator.js / optionStrategies.js 不再被主页面加载。
 
-## 数据源说明
+GitHub Actions 在发布前运行逻辑测试；代码推送和手动发布还运行浏览器测试。只打包显式允许的文件到 dist/，不发布源脚本、依赖目录、测试或配置。行情构建失败时，从最近成功缓存重新生成页面并标记 mode=cached-preview，保留原行情和生成时间；无有效缓存则停止发布。
 
-应用程序支持两种数据模式：
+数据、生成的 Agent 页面、dist/ 和测试截图不提交。定时工作流仍可能因排队、网络或上游接口不可用而延迟，必须读取实际时间及错误信息。
 
-1. **腾讯财经免费公开行情接口**：
-   - 获取股票最新报价和涨跌幅
-   - 无需 API Key
-   - 响应带浏览器可用的 CORS 头，适合纯前端直接请求
+## 风险提示
 
-2. **Cboe 延迟期权链静态缓存**：
-   - GitHub Actions 部署前从 Cboe delayed quotes JSON 生成同源缓存文件
-   - 解析合约名、执行价、最新价、买卖价、成交量、未平仓量、隐含波动率和希腊字母
-   - 定时工作流会在美股交易时段刷新并重新部署缓存
-
-当前数据源状态会在期权链表格上方显示。
-
-## 技术实现
-
-- **前端框架**：HTML5, CSS3, JavaScript (ES6+)
-- **UI组件**：Bootstrap 5
-- **数学模型**：Black-Scholes期权定价模型
-- **API集成**：腾讯财经行情接口 + Cboe 延迟期权链静态缓存
-
-## 免责声明
+本项目是研究与筛选工具，不保证数据准确性、收益或流动性。真实交易前，应在券商独立核验合约、报价、交割物、费用与风险；AI 推荐不能替代判断。
