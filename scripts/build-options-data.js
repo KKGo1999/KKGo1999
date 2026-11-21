@@ -3,6 +3,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
+const { setTimeout: sleep } = require('node:timers/promises');
 const core = require('../options/analysisCore.js');
 const APIService = require('../options/apiService.js');
 const { renderAgentSite } = require('./render-agent-site.js');
@@ -39,19 +40,38 @@ function normalizeOption(rawOption, symbol) {
     };
 }
 
-async function fetchCboeOptions(symbol) {
+function errorText(error) {
+    return String(error?.message || error || 'unknown error').replace(/[\r\n\u0000-\u001f\u007f]/g, ' ').slice(0, 400);
+}
+
+async function fetchCboeOptions(symbol, { fetchImpl = fetch, wait = sleep, logger = console, timeoutMs = 20000 } = {}) {
     let lastError;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        let httpStatus = null;
         try {
-            const response = await fetch(SOURCE_BASE_URL + '/' + encodeURIComponent(symbol) + '.json', {
+            const response = await fetchImpl(SOURCE_BASE_URL + '/' + encodeURIComponent(symbol) + '.json', {
                 headers: { Accept: 'application/json', 'User-Agent': 'KKGo1999 options data builder' },
-                signal: AbortSignal.timeout(20000)
+                signal: AbortSignal.timeout(timeoutMs)
             });
+            httpStatus = response.status;
             if (!response.ok) throw new Error('HTTP ' + response.status);
-            return await response.json();
+            const data = await response.json();
+            if (!Array.isArray(data?.data?.options)) throw new Error('response has no options array');
+            logger.log(`Cboe ${symbol}: attempt ${attempt}/${maxAttempts}, retries ${attempt - 1}, HTTP ${httpStatus}, success`);
+            return data;
         } catch (error) {
-            lastError = error;
-            if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+            const reason = ['TimeoutError', 'AbortError'].includes(error?.name) ? 'request timed out' :
+                error instanceof SyntaxError ? 'invalid JSON response' : errorText(error);
+            const causeCode = /^[A-Z0-9_]+$/.test(error?.cause?.code || '') ? ` (${error.cause.code})` : '';
+            const status = httpStatus === null ? 'no HTTP response' : `HTTP ${httpStatus}`;
+            const detail = `${status}; ${reason}${causeCode}`;
+            lastError = new Error(`Cboe ${symbol}: ${detail}; attempts=${attempt}, retries=${attempt - 1}`, { cause: error });
+            lastError.httpStatus = httpStatus;
+            lastError.attempts = attempt;
+            logger.warn(`Cboe ${symbol}: attempt ${attempt}/${maxAttempts}, retries ${attempt - 1}, ${detail}; ` +
+                (attempt < maxAttempts ? `retrying in ${attempt}s` : 'giving up'));
+            if (attempt < maxAttempts) await wait(1000 * attempt);
         }
     }
     throw lastError;
@@ -61,29 +81,33 @@ async function buildSite({
     root = path.resolve(__dirname, '..'),
     asOf = new Date().toISOString(),
     symbols = core.SUPPORTED_SYMBOLS,
-    loadOptions = fetchCboeOptions,
+    loadOptions,
     loadQuote = symbol => api.getStockPrice(symbol),
     loadYtd = (symbol, price) => api.getYearToDateChange(symbol, price),
-    mode = 'published-default'
+    mode = 'published-default',
+    logger = console,
+    reportPath
 } = {}) {
     const snapshotId = 'options-' + asOf.replace(/[:.]/g, '-');
     const snapshots = [];
     const stocks = [];
     const failures = [];
+    const getOptions = loadOptions || (symbol => fetchCboeOptions(symbol, { logger }));
     let nextIndex = 0;
     // Limit upstream concurrency; failed symbols remain visible in the published directory.
     async function worker() {
         while (nextIndex < symbols.length) {
             const symbol = symbols[nextIndex++];
-            const [optionsResult, quoteResult] = await Promise.allSettled([loadOptions(symbol), loadQuote(symbol)]);
+            const [optionsResult, quoteResult] = await Promise.allSettled([getOptions(symbol), loadQuote(symbol)]);
             const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
             const errors = [];
             let optionsData = null;
             let ytd = null;
-            if (quoteResult.status === 'rejected') errors.push('stock: ' + quoteResult.reason.message);
+            if (quoteResult.status === 'rejected') errors.push('stock: ' + errorText(quoteResult.reason));
             if (optionsResult.status === 'fulfilled') {
                 const raw = optionsResult.value;
-                const options = (raw?.data?.options || []).map(option => normalizeOption(option, symbol)).filter(Boolean);
+                const options = (Array.isArray(raw?.data?.options) ? raw.data.options : [])
+                    .map(option => normalizeOption(option, symbol)).filter(Boolean);
                 options.sort((a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.strike - b.strike ||
                     a.optionType.localeCompare(b.optionType) || a.contractSymbol.localeCompare(b.contractSymbol));
                 if (options.length) {
@@ -96,10 +120,10 @@ async function buildSite({
                         isDelayed: true, underlyingQuote: quote, currency: 'USD', options
                     };
                 } else errors.push('options: no parseable contracts');
-            } else errors.push('options: ' + optionsResult.reason.message);
+            } else errors.push('options: ' + errorText(optionsResult.reason));
             if (quote?.price > 0) {
                 try { ytd = await loadYtd(symbol, quote.price); }
-                catch (error) { errors.push('ytd: ' + error.message); }
+                catch (error) { errors.push('ytd: ' + errorText(error)); }
             }
             const snapshot = { symbol, quote, optionsData, error: errors.join('; ') };
             snapshots.push(snapshot);
@@ -115,14 +139,20 @@ async function buildSite({
             };
             stocks.push(stock);
             if (errors.length) failures.push({ symbol, errors });
-            console.log(symbol + ': ' + stock.optionCount + ' options, ' + stock.status);
+            logger.log(symbol + ': ' + stock.optionCount + ' options, ' + stock.status);
+            if (errors.length) logger.warn(symbol + ': ' + errors.join('; '));
         }
     }
     await Promise.all(Array.from({ length: 3 }, () => worker()));
-    if (!snapshots.some(snapshot => snapshot.optionsData)) throw new Error('No options available; previous published data retained');
     const order = new Map(symbols.map((symbol, index) => [symbol, index]));
     stocks.sort((a, b) => order.get(a.symbol) - order.get(b.symbol));
     snapshots.sort((a, b) => order.get(a.symbol) - order.get(b.symbol));
+    failures.sort((a, b) => order.get(a.symbol) - order.get(b.symbol));
+    // Persist diagnostics outside the published snapshot, including total failures.
+    if (reportPath) await fs.writeFile(reportPath, JSON.stringify({ attemptedAt: asOf,
+        totalSymbols: symbols.length, availableSymbols: snapshots.filter(item => item.optionsData).length,
+        failures }, null, 2) + '\n');
+    if (!snapshots.some(snapshot => snapshot.optionsData)) throw new Error('No options available; previous published data retained');
     const scan = core.scanSnapshots(core.WATCHLIST.filter(symbol => symbols.includes(symbol))
         .map(symbol => snapshots.find(snapshot => snapshot.symbol === symbol)), core.DEFAULTS,
     { asOf, snapshotId, scope: 'published-default' });
@@ -169,7 +199,7 @@ async function buildSite({
 }
 
 if (require.main === module) {
-    buildSite().catch(error => { console.error(error); process.exitCode = 1; });
+    buildSite({ reportPath: process.env.OPTIONS_REFRESH_REPORT }).catch(error => { console.error(error); process.exitCode = 1; });
 }
 
-module.exports = { buildSite, normalizeOption, parseContractSymbol };
+module.exports = { buildSite, normalizeOption, parseContractSymbol, fetchCboeOptions };

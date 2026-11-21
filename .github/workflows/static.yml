@@ -13,11 +13,8 @@ on:
   schedule:
     - cron: "20,50 13-22 * * 1-5"
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Keep a single Pages deployment lane. Newer runs cancel older in-progress
 # deploys so scheduled refreshes or repeated pushes do not leave stale runs queued.
@@ -26,13 +23,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Single deploy job since we're just deploying
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      artifact_name: ${{ steps.artifact_name.outputs.name }}
+      artifact_id: ${{ steps.upload.outputs.artifact_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -54,31 +50,80 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: options/data
-          key: options-snapshot-v1-${{ github.run_id }}
+          key: options-snapshot-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: options-snapshot-v1-
       - name: Refresh delayed options data
         id: refresh
         continue-on-error: true
         timeout-minutes: 7
+        env:
+          OPTIONS_REFRESH_REPORT: ${{ runner.temp }}/options-refresh-report.json
         run: npm run build:data
       - name: Cache successful snapshot
         if: steps.refresh.outcome == 'success'
         uses: actions/cache/save@v5
         with:
           path: options/data
-          key: options-snapshot-v1-${{ github.run_id }}
+          key: options-snapshot-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Package fresh data
+        id: package_fresh
         if: steps.refresh.outcome == 'success'
         run: npm run build
       - name: Package explicitly marked cached data
+        id: package_cached
         if: steps.refresh.outcome != 'success'
         run: npm run build -- --cached
-      - name: Setup Pages
-        uses: actions/configure-pages@v6
+      - name: Summarize options refresh
+        if: ${{ !cancelled() && steps.refresh.outcome != 'skipped' && steps.refresh.outcome != '' }}
+        env:
+          OPTIONS_REFRESH_REPORT: ${{ runner.temp }}/options-refresh-report.json
+          OPTIONS_REFRESH_OUTCOME: ${{ steps.refresh.outcome }}
+          OPTIONS_PACKAGE_OUTCOME: ${{ steps.refresh.outcome == 'success' && steps.package_fresh.outcome || steps.package_cached.outcome }}
+        run: node scripts/summarize-options-refresh.js
+      - name: Name Pages artifact
+        id: artifact_name
+        run: echo "name=github-pages-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - name: Upload artifact
+        id: upload
         uses: actions/upload-pages-artifact@v5
         with:
+          name: ${{ steps.artifact_name.outputs.name }}
           path: 'dist'
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install deployment dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+      - name: Wait for Pages artifact
+        timeout-minutes: 4
+        uses: actions/github-script@v8
+        env:
+          PAGES_ARTIFACT_NAME: ${{ needs.build.outputs.artifact_name }}
+          PAGES_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+        with:
+          script: |
+            const { checkPagesArtifact } = require('./scripts/wait-pages-artifact.js');
+            await checkPagesArtifact();
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact_name }}
