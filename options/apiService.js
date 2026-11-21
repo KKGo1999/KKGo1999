@@ -198,7 +198,8 @@ class APIService {
     }
 
     getOptionsDataUrl(symbol) {
-        return `${this.optionsDataBaseUrl}/${encodeURIComponent(symbol)}.json`;
+        const version = this.expectedOptionsSnapshotId ? '?snapshot=' + encodeURIComponent(this.expectedOptionsSnapshotId) : '';
+        return `${this.optionsDataBaseUrl}/${encodeURIComponent(symbol)}.json${version}`;
     }
 
     async getOptionsData(symbol, requestOptions) {
@@ -206,6 +207,9 @@ class APIService {
         const data = await this.fetchJson(this.getOptionsDataUrl(normalizedSymbol), requestOptions);
         if (data?.symbol !== normalizedSymbol || !String(data?.schemaVersion || '').startsWith('1.')) {
             throw new Error('期权缓存格式或股票代码不匹配');
+        }
+        if (this.expectedOptionsSnapshotId && data.snapshotId !== this.expectedOptionsSnapshotId) {
+            throw new Error('期权文件尚未与新快照同步，请稍后刷新');
         }
         const options = data?.options;
 

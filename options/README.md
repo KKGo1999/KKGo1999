@@ -36,6 +36,24 @@ python3 -m http.server 8766 --bind 127.0.0.1 --directory dist
 
 浏览器直连并不能提供服务端级密钥隔离；浏览器扩展、同源恶意代码、共享设备仍有风险。页面只加载本站脚本，以 CSP 限制连接地址，不使用第三方 AI 代理。建议使用单独项目密钥、限制额度并及时轮换。网络/CORS、账号权限、地区限制、额度不足会明确报错；不自动重试收费请求。
 
+## 手动更新期权
+
+页面顶部的“更新期权数据”会调用 GitHub 官方 REST API，固定触发 KKGo1999/KKGo1999 的 static.yml、main 分支。现有“最新股票价格”的刷新仍只更新股价，不触发部署。操作需要确认，会更新所有访客使用的线上数据；不调用 AI、不提交交易。
+
+1. 在 [GitHub 创建 fine-grained Token](https://github.com/settings/personal-access-tokens/new)，选择资源所有者 KKGo1999。
+2. Repository access 仅选择 KKGo1999/KKGo1999；Repository permissions 中 Actions 设置 Read and write，并设置较短有效期。不需要 Contents 写权限。
+3. 在页面的“GitHub 配置”填写 Token，再点击“更新期权数据”。具体权限要求见 [官方工作流触发接口](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event)。
+
+GitHub Token 与 AI Key 独立，只放在当前页面内存中；刷新、关闭页面或清除会移除，不写入浏览器持久存储、历史或导出。只通过 Authorization 请求头发送到 api.github.com，连接限制由 CSP 控制。浏览器扩展和同源代码仍有读取风险；Actions 写权限也不只限于这个按钮，请勿在不信任的页面配置。
+
+已有运行中任务时直接跟踪，不重复触发；支持 Web Locks 的浏览器还阻止同源多标签页同时操作。此机制不是跨设备的全局锁；定时任务或别的设备仍可能创建新任务，现有 GitHub concurrency 策略可能取消旧任务。页面会显示相应状态。
+
+页面每 15 秒检查一次运行状态，最长跟踪 30 分钟；部署后最多等待 3 分钟核对当前站点的发布编号和快照。新快照到达后刷新矩阵，并在已有扫描结果时重扫本地候选，不自动调用收费 AI。若行情时间没变化、部分股票失败或沿用旧缓存，会分别提示，工作流成功不等于行情已更新。
+
+“停止跟踪”仅停止本页等待，不取消 GitHub 上的任务；可用“检查进度”继续。触发请求超时或响应无法确认时不自动重试，以免重复部署，请先检查 GitHub。页面刷新后跟踪状态会丢失，但再次操作前仍检查已有任务。
+
+本地预览可以触发线上工作流，但线上部署不会修改本地文件；此时页面只确认线上部署完成，不宣称本地数据更新。读取本地新行情仍需运行 npm run build:data 和 npm run build。
+
 ## 数据与收益口径
 
 股价来自腾讯财经；期权链来自部署时构建的 Cboe 延迟快照。两者时间可能不同，不是实时可成交报价。

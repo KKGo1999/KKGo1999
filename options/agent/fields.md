@@ -27,6 +27,8 @@ analysisDate 按 America/New_York 的日历日期确定。到期天数等于到�
 
 mode=cached-preview 标识刷新失败后使用的旧快照，或明确标识的旧缓存预览，不是新行情；保留原 generatedAt 和源站时间。正常构建为 published-default。
 
+options-manifest.json 的可选 deployment 字段包含 GitHub 任务编号 runId、代码提交 commit 和打包时间 publishedAt，用于网页核对指定任务是否已发布；本地构建可以没有此字段。publishedAt 不替代 generatedAt 或行情时间；即使部署编号改变，也可能仍是 cached-preview 旧缓存。公开清单不包含 GitHub Token。
+
 dataQuality 包含 status、requiresConfirmation、maxAgeHours、sourceTimeZone 和 issues。当前阈值为 96 小时；缓存生成/股价抓取时间缺失、过旧或异常未来、源站原始日期超过 4 天、混合快照或 cached-preview 都会告警。源站时间只检查日期，不推测时区。该规则是提示，不保证阈值内数据可交易；浏览器在付费 AI 请求前要求确认告警或部分失败，Agent 也应明确披露这些限制。
 
 ## 股票字段

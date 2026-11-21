@@ -19,7 +19,7 @@ before(async () => {
         if (!file.startsWith(root + path.sep) && file !== root) { res.writeHead(403).end(); return; }
         try {
             if ((await fs.stat(file)).isDirectory()) file = path.join(file, 'index.html');
-            const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+            const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
             res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
             res.end(await fs.readFile(file));
         } catch { res.writeHead(404).end(); }
@@ -78,7 +78,9 @@ function holdNextAiResponse(state) {
 async function fixture(browser, options = {}) {
     const context = await browser.newContext({ viewport: options.viewport || { width: 1440, height: 1000 },
         colorScheme: options.dark ? 'dark' : 'light', acceptDownloads: true });
-    const state = { mode: 'success', stale: false, slowBili: false, requests: [], quoteRequests: [], errors: [] };
+    const appOrigin = options.liveSite ? 'https://www.kkgo1999.top' : origin;
+    const state = { mode: 'success', stale: false, slowBili: false, requests: [], quoteRequests: [], errors: [],
+        optionRequests: [], github: { requests: [], posts: 0, active: false, published: false, status: 'completed', conclusion: 'success' } };
     await context.route('**/*', async route => {
         const url = new URL(route.request().url());
         if (url.hostname === 'qt.gtimg.cn') {
@@ -92,8 +94,38 @@ async function fixture(browser, options = {}) {
             await route.fulfill({ json: { data: { [code]: { day } } } });
         } else if (url.pathname.match(/^\/options\/data\/options\/[^/]+\.json$/)) {
             const symbol = path.basename(url.pathname, '.json');
+            state.optionRequests.push(symbol);
             if (state.slowBili && symbol === 'BILI') await wait(800);
-            await route.fulfill({ json: chain(symbol, state.stale) });
+            await route.fulfill({ json: { ...chain(symbol, state.stale), snapshotId: state.github.published ? 'browser-new' : 'browser-old' } });
+        } else if (url.pathname === '/options/data/options-manifest.json') {
+            const published = state.github.published;
+            await route.fulfill({ json: { schemaVersion: '1.1.0', snapshotId: published && !state.github.cached ? 'browser-new' : 'browser-old',
+                generatedAt: published && !state.github.cached ? now : new Date(Date.parse(now) - 3600000).toISOString(),
+                mode: state.github.cached ? 'cached-preview' : 'published-default',
+                deployment: { runId: published ? '123' : '100' }, failures: [],
+                symbols: core.WATCHLIST.map(symbol => ({ symbol, status: 'available', url: '/options/data/options/' + symbol + '.json', sourceTimestamp: stamp }))
+            } });
+        } else if (url.hostname === 'api.github.com') {
+            const gh = state.github;
+            const request = route.request();
+            gh.requests.push({ url: url.href, method: request.method(), headers: request.headers(), body: request.postData() });
+            if (gh.error) { await route.fulfill({ status: gh.error, json: { message: 'test-github-token-only' } }); return; }
+            if (url.pathname.endsWith('/dispatches')) {
+                gh.posts++;
+                if (gh.dispatchLost) { await route.abort(); return; }
+                gh.active = true;
+                await route.fulfill({ json: { workflow_run_id: 123 } });
+            } else if (url.pathname.endsWith('/static.yml/runs')) {
+                await route.fulfill({ json: { workflow_runs: gh.active ? [{ id: 123, status: 'in_progress', head_branch: 'main' }] : [] } });
+            } else if (url.pathname.endsWith('/runs/123/jobs')) {
+                await route.fulfill({ json: { jobs: [] } });
+            } else if (url.pathname.endsWith('/runs/123')) {
+                const gate = gh.holdRun;
+                if (gate) { gate.started.resolve(); await gate.release.promise; }
+                gh.published = gh.status === 'completed' && gh.conclusion === 'success';
+                try { await route.fulfill({ json: { id: 123, path: '.github/workflows/static.yml', head_branch: 'main', status: gh.status, conclusion: gh.conclusion } }); }
+                finally { gate?.finished.resolve(); }
+            } else await route.fulfill({ status: 404, json: {} });
         } else if (['api.openai.com', 'open.bigmodel.cn'].includes(url.hostname)) {
             const body = route.request().postDataJSON();
             const mode = state.mode;
@@ -108,16 +140,20 @@ async function fixture(browser, options = {}) {
                 await route.fulfill({ contentType: 'text/event-stream', body: aiEvents(body, mode) });
             } finally { gate?.finished.resolve(); }
         } else if (url.origin === origin) await route.continue();
+        else if (url.origin === appOrigin) {
+            const response = await fetch(origin + url.pathname + url.search);
+            await route.fulfill({ status: response.status, contentType: response.headers.get('content-type'), body: Buffer.from(await response.arrayBuffer()) });
+        }
         else await route.abort();
     });
     const page = await context.newPage();
     page.setDefaultTimeout(10000);
     page.on('pageerror', error => state.errors.push(error.message));
     page.on('dialog', dialog => dialog.dismiss());
-    await page.goto(origin + '/options/');
+    await page.goto(appOrigin + '/options/');
     await page.waitForFunction(() => document.querySelector('#price-AMD')?.textContent.startsWith('$'));
     assert.equal(await page.locator('#overviewTable tbody tr').count(), core.WATCHLIST.length);
-    return { context, page, state };
+    return { context, page, state, appOrigin };
 }
 
 async function scan(page) {
@@ -317,6 +353,115 @@ test('stock-switch race, stale confirmation, long history, migration and storage
         assert.equal((await readHistory(page)).length, 0);
         assert.deepEqual(state.errors, []);
     } finally { await context?.close(); await browser.close(); }
+});
+
+async function configureGitHub(page) {
+    page.removeAllListeners('dialog');
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('#githubSettings').evaluate(node => { node.open = true; });
+    await page.locator('#githubToken').fill('test-github-token-only');
+}
+
+for (const profile of [
+    { name: 'github-chromium', engine: chromium, viewport: { width: 1440, height: 1000 } },
+    { name: 'github-webkit-dark', engine: webkit, viewport: { width: 390, height: 844 }, dark: true }
+]) {
+    test(profile.name + ': dispatch, publication verification, data reload and token isolation', { timeout: 90000 }, async () => {
+        const browser = await profile.engine.launch();
+        let context;
+        try {
+            const setup = await fixture(browser, { ...profile, liveSite: true });
+            const { page, state } = setup; context = setup.context;
+            await chooseStock(page, 'BILI');
+            await page.waitForSelector('#advancedResultTable');
+            await scan(page);
+            const optionReads = state.optionRequests.length;
+            await page.locator('#updateOptionsData').click();
+            assert.equal(await page.locator('#githubSettings').getAttribute('open'), '');
+            assert.equal(state.github.posts, 0);
+            await configureGitHub(page);
+            const completed = page.waitForFunction(() => document.querySelector('#optionsUpdateStatus').dataset.kind === 'success');
+            await page.locator('#updateOptionsData').click();
+            await completed;
+            await page.waitForFunction(() => window.optionsStockState?.optionsData.snapshotId === 'browser-new');
+            await page.waitForFunction(() => window.aiRecommendations.getScanExport()?.sources.every(source => source.optionsSnapshotId === 'browser-new'));
+            assert.ok(state.optionRequests.length > optionReads);
+            assert.equal(state.github.posts, 1);
+            assert.equal(state.requests.length, 0, 'data refresh must not invoke paid AI');
+            assert.equal(await page.locator('#optionsUpdateRun').getAttribute('href'), 'https://github.com/KKGo1999/KKGo1999/actions/runs/123');
+            const post = state.github.requests.find(request => request.method === 'POST');
+            assert.deepEqual(JSON.parse(post.body), { ref: 'main' });
+            assert.equal(post.headers.authorization, 'Bearer test-github-token-only');
+            assert.ok(!await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }).includes('test-github-token-only')));
+            assert.ok(!JSON.stringify(await page.evaluate(() => window.aiRecommendations.getScanExport())).includes('test-github-token-only'));
+            assert.equal(await page.locator('#aiApiKey').inputValue(), '');
+            assert.equal(await page.locator('#githubToken').inputValue(), 'test-github-token-only');
+            await page.evaluate(() => window.scrollTo(0, 0));
+            await page.screenshot({ path: path.join(root, 'test-results', profile.name + '.png') });
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+            await page.setViewportSize({ width: 320, height: 720 });
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+            await page.reload();
+            assert.equal(await page.locator('#githubToken').inputValue(), '');
+            assert.deepEqual(state.errors, []);
+        } finally { await context?.close(); await browser.close(); }
+    });
+}
+
+test('GitHub existing task, fallback cache, auth failure and ambiguous dispatch are not false successes', { timeout: 90000 }, async () => {
+    const browser = await chromium.launch();
+    try {
+        for (const scenario of ['active', 'cached', 'auth', 'lost', 'local']) {
+            const { context, page, state } = await fixture(browser, { liveSite: scenario !== 'local' });
+            try {
+                state.github.active = scenario === 'active';
+                state.github.cached = scenario === 'cached';
+                state.github.error = scenario === 'auth' ? 401 : null;
+                state.github.dispatchLost = scenario === 'lost';
+                await configureGitHub(page);
+                await page.locator('#updateOptionsData').click();
+                await page.waitForFunction(() => document.querySelector('#optionsDataToolbar').getAttribute('aria-busy') === 'false');
+                const message = await page.locator('#optionsUpdateStatus').textContent();
+                if (scenario === 'active') { assert.equal(state.github.posts, 0); assert.match(message, /已重新抓取/); }
+                if (scenario === 'cached') { assert.match(message, /旧缓存/); assert.equal(await page.locator('#optionsUpdateStatus').getAttribute('data-kind'), 'warning'); }
+                if (scenario === 'auth') { assert.match(message, /无效或已过期/); assert.equal(state.github.posts, 0); assert.ok(!message.includes('test-github-token-only')); }
+                if (scenario === 'lost') { assert.match(message, /不确定/); assert.equal(state.github.posts, 1); assert.equal(await page.locator('#updateOptionsData').isDisabled(), true); }
+                if (scenario === 'local') assert.match(message, /本地预览数据不会自动同步/);
+                assert.equal(state.requests.length, 0);
+                assert.deepEqual(state.errors, []);
+            } finally { await context.close(); }
+        }
+    } finally { await browser.close(); }
+});
+
+test('GitHub update can stop tracking, clear its token, and prevent duplicate tabs without cancelling the remote job', { timeout: 90000 }, async () => {
+    const browser = await webkit.launch();
+    let context;
+    const gate = { started: Promise.withResolvers(), release: Promise.withResolvers(), finished: Promise.withResolvers() };
+    try {
+        const setup = await fixture(browser, { liveSite: true, viewport: { width: 390, height: 844 } });
+        const { page, state, appOrigin } = setup; context = setup.context;
+        state.github.holdRun = gate;
+        await configureGitHub(page);
+        await page.locator('#updateOptionsData').click();
+        await gate.started.promise;
+        assert.equal(await page.locator('#updateOptionsData').isDisabled(), true);
+        const other = await context.newPage();
+        await other.goto(appOrigin + '/options/');
+        await configureGitHub(other);
+        await other.locator('#updateOptionsData').click();
+        await other.waitForFunction(() => document.querySelector('#optionsUpdateStatus').textContent.includes('另一标签页'));
+        assert.equal(state.github.posts, 1);
+        await page.locator('#clearGithubToken').click();
+        assert.equal(await page.locator('#githubToken').inputValue(), '');
+        assert.match(await page.locator('#optionsUpdateStatus').textContent(), /Token 已清除/);
+        gate.release.resolve();
+        await gate.finished.promise;
+        assert.match(await page.locator('#optionsUpdateStatus').textContent(), /Token 已清除/);
+        assert.equal(state.github.requests.some(request => request.url.endsWith('/cancel')), false);
+        assert.equal(state.requests.length, 0);
+        assert.deepEqual(state.errors, []);
+    } finally { gate.release.resolve(); await context?.close(); await browser.close(); }
 });
 
 test('home and shortcut pages do not run broken theme scripts', async () => {

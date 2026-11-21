@@ -4,9 +4,10 @@ const path = require('node:path');
 const ROOT_FILES = ['index.html', 'css', 'img', 'redirect', 'llms.txt'];
 const OPTION_FILES = ['index.html', 'simple.html', 'styles.css', 'app.js', 'apiService.js', 'analysisCore.js',
     'asyncControl.js', 'aiProviders.js', 'historyStore.js', 'aiRecommendations.js', 'advancedAnalysisFix.js',
+    'githubActions.js', 'dataRefresh.js',
     'vendor', 'icons', 'agent', 'data'];
 
-async function packageSite(root = path.resolve(__dirname, '..'), destination = path.join(root, 'dist'), { cached = false } = {}) {
+async function packageSite(root = path.resolve(__dirname, '..'), destination = path.join(root, 'dist'), { cached = false, deployment = null } = {}) {
     if (path.resolve(root) === path.resolve(destination)) throw new Error('Output must not replace source');
     await fs.access(path.join(root, 'options/data/options-manifest.json'));
     await fs.rm(destination, { recursive: true, force: true });
@@ -36,12 +37,17 @@ async function packageSite(root = path.resolve(__dirname, '..'), destination = p
     const manifestPath = path.join(destination, 'options/data/options-manifest.json');
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
     if (cached) manifest.mode = 'cached-preview';
+    if (deployment) manifest.deployment = { runId: String(deployment.runId), commit: deployment.commit, publishedAt: deployment.publishedAt };
     manifest.fieldsUrl = '/options/agent/fields.html';
     manifest.fieldsTextUrl = '/options/agent/fields.txt';
     await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
     console.log('Static site packaged in ' + destination);
 }
 
-if (require.main === module) packageSite(undefined, undefined, { cached: process.argv.includes('--cached') })
+if (require.main === module) packageSite(undefined, undefined, {
+    cached: process.argv.includes('--cached'),
+    deployment: process.env.GITHUB_RUN_ID ? { runId: process.env.GITHUB_RUN_ID,
+        commit: process.env.GITHUB_SHA, publishedAt: new Date().toISOString() } : null
+})
     .catch(error => { console.error(error); process.exitCode = 1; });
 module.exports = { packageSite, ROOT_FILES, OPTION_FILES };

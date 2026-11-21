@@ -185,12 +185,16 @@ test('packaging uses a public allowlist and marks cached snapshots without inven
         ] } }), loadQuote: async () => ({ price: 20, retrievedAt: asOf, sourceTimestamp: '2026-11-17 16:00:00' }),
         loadYtd: async () => ({ percent: 2, basePrice: 19, baseDate: '2026-01-02' }) });
     await fs.writeFile(path.join(root, '.env'), 'NOT-PUBLIC');
-    await packageSite(root, path.join(root, 'dist'), { cached: true });
+    const deployment = { runId: '123', commit: 'a'.repeat(40), publishedAt: '2026-11-18T02:00:00Z' };
+    await packageSite(root, path.join(root, 'dist'), { cached: true, deployment });
     await assert.rejects(fs.access(path.join(root, 'dist/.env')));
     await assert.rejects(fs.access(path.join(root, 'dist/package.json')));
     const data = JSON.parse(await fs.readFile(path.join(root, 'dist/options/data/options/BILI.json'), 'utf8'));
     assert.equal(data.mode, 'cached-preview');
     assert.equal(data.generatedAt, asOf);
+    const manifest = JSON.parse(await fs.readFile(path.join(root, 'dist/options/data/options-manifest.json'), 'utf8'));
+    assert.deepEqual(manifest.deployment, deployment);
+    assert.equal(manifest.generatedAt, asOf);
     const candidates = JSON.parse(await fs.readFile(path.join(root, 'dist/options/data/candidates.json'), 'utf8'));
     assert.equal(candidates.dataQuality.requiresConfirmation, true);
 });

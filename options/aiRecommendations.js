@@ -893,6 +893,16 @@
     }
 
     function bindEvents() {
+        document.addEventListener('optionsDataUpdated', () => {
+            const hadScan = !!latestLocalScan;
+            cancelRun();
+            latestLocalScan = null;
+            latestScanSignature = '';
+            $('exportCurrentAi').hidden = true;
+            setStatus('数据已更新');
+            setOutput('<div class="ai-empty-state">期权快照已更新。旧版 AI 结果可在历史记录中查看。</div>');
+            if (hadScan) runCandidateScan();
+        });
         const scanButton = $('scanAiCandidates');
         if (scanButton) {
             scanButton.addEventListener('click', runCandidateScan);

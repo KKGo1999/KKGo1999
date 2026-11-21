@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>期权分析</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://qt.gtimg.cn https://web.ifzq.gtimg.cn https://open.bigmodel.cn https://api.openai.com; base-uri 'self'; form-action 'none'; object-src 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://qt.gtimg.cn https://web.ifzq.gtimg.cn https://open.bigmodel.cn https://api.openai.com https://api.github.com; base-uri 'self'; form-action 'none'; object-src 'none'">
     <link rel="alternate" type="application/json" href="data/stocks.json" title="股票数据">
     <link rel="describedby" type="text/plain" href="agent/llms.txt">
     <link rel="stylesheet" href="vendor/bootstrap-5.3.0.min.css">
-    <link rel="stylesheet" href="styles.css?v=20261118-1">
+    <link rel="stylesheet" href="styles.css?v=20261118-2">
     <link rel="icon" type="image/png" href="/img/favicon.png">
     <link rel="apple-touch-icon" href="/img/favicon.png"/>
 </head>
@@ -45,6 +45,35 @@
             </div>
         </header>
         <p class="key-security-note">密钥仅保留在当前页面，刷新后清除。浏览器直连存在密钥暴露风险；API 调用可能产生费用。</p>
+
+        <section class="options-data-toolbar" id="optionsDataToolbar" aria-label="期权数据更新" aria-busy="false">
+            <div class="options-data-heading">
+                <div class="options-data-times">
+                    <strong>期权数据</strong>
+                    <span id="optionsSnapshotTime">正在读取快照时间…</span>
+                    <span id="optionsSourceTime"></span>
+                </div>
+                <div class="options-update-actions">
+                    <button type="button" id="updateOptionsData" class="btn btn-sm btn-outline-primary"><span class="tool-icon icon-refresh" aria-hidden="true"></span>更新期权数据</button>
+                    <button type="button" id="checkOptionsUpdate" class="btn btn-sm btn-outline-secondary" hidden>检查进度</button>
+                    <button type="button" id="stopOptionsUpdate" class="btn btn-sm btn-outline-secondary" hidden>停止跟踪</button>
+                </div>
+            </div>
+            <div class="options-update-feedback">
+                <span id="optionsUpdateStatus" role="status" aria-live="polite"></span>
+                <a id="optionsUpdateRun" href="https://github.com/KKGo1999/KKGo1999/actions/workflows/static.yml" target="_blank" rel="noopener noreferrer" hidden>查看 GitHub 任务</a>
+            </div>
+            <details id="githubSettings" class="github-settings">
+                <summary>GitHub 配置</summary>
+                <label for="githubToken">GitHub Token</label>
+                <div class="github-token-row">
+                    <input type="password" id="githubToken" class="form-control form-control-sm" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="github_pat_…" aria-describedby="githubTokenNote">
+                    <button type="button" id="clearGithubToken" class="btn btn-sm btn-outline-secondary">清除</button>
+                    <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">创建 Token</a>
+                </div>
+                <p id="githubTokenNote" class="data-time-note">仅授权 KKGo1999/KKGo1999，Actions 设为 Read and write，并设置较短有效期。Token 只保留在当前页面，刷新后清除；浏览器扩展和同源代码仍可能读取它。</p>
+            </details>
+        </section>
 
         <!-- 股票价格概览 -->
         <div class="row mb-4" id="stockPriceOverview">
@@ -302,13 +331,15 @@
         </footer>
     </div>
 
-    <script src="asyncControl.js?v=20261118-1"></script>
-    <script src="aiProviders.js?v=20261118-1"></script>
-    <script src="historyStore.js?v=20261118-1"></script>
-    <script src="analysisCore.js?v=20261118-1"></script>
-    <script src="apiService.js?v=20261118-1"></script>
-    <script src="app.js?v=20261118-1"></script>
-    <script src="advancedAnalysisFix.js?v=20261118-1"></script>
-    <script src="aiRecommendations.js?v=20261118-1"></script>
+    <script src="asyncControl.js?v=20261118-2"></script>
+    <script src="aiProviders.js?v=20261118-2"></script>
+    <script src="historyStore.js?v=20261118-2"></script>
+    <script src="analysisCore.js?v=20261118-2"></script>
+    <script src="apiService.js?v=20261118-2"></script>
+    <script src="githubActions.js?v=20261118-2"></script>
+    <script src="dataRefresh.js?v=20261118-2"></script>
+    <script src="app.js?v=20261118-2"></script>
+    <script src="advancedAnalysisFix.js?v=20261118-2"></script>
+    <script src="aiRecommendations.js?v=20261118-2"></script>
 </body>
 </html>

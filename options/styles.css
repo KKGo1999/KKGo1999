@@ -469,6 +469,37 @@ details.data-time-note { margin: 12px 0; }
 
 .icon-copy { --tool-icon: url('icons/copy.svg'); }
 .icon-download { --tool-icon: url('icons/download.svg'); }
+.icon-refresh { --tool-icon: url('icons/refresh-cw.svg'); }
+
+.options-data-toolbar {
+    padding: 14px 0;
+    margin-bottom: 20px;
+    border-top: 1px solid var(--advanced-border);
+    border-bottom: 1px solid var(--advanced-border);
+}
+.options-data-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.options-data-times { display: grid; gap: 3px; min-width: 0; font-size: 0.82rem; color: var(--advanced-muted); overflow-wrap: anywhere; }
+.options-data-times strong { color: var(--text-color); font-size: 0.95rem; }
+.options-update-actions { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; justify-content: flex-end; }
+.options-update-actions .btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
+.options-update-feedback { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.85rem; overflow-wrap: anywhere; }
+.options-update-feedback:not(:has(#optionsUpdateStatus:empty)) { margin-top: 10px; }
+#optionsUpdateStatus[data-kind="error"] { color: var(--negative-color); }
+#optionsUpdateStatus[data-kind="warning"], #optionsUpdateStatus[data-kind="partial"] { color: var(--text-color); font-weight: 600; }
+.github-settings { margin-top: 10px; font-size: 0.85rem; }
+.github-settings summary { width: fit-content; cursor: pointer; }
+.github-settings label { display: block; margin-top: 12px; margin-bottom: 4px; }
+.github-token-row { display: flex; align-items: center; gap: 8px; max-width: 640px; }
+.github-token-row input { min-width: 0; flex: 1; }
+.github-token-row button, .github-token-row a { flex-shrink: 0; }
+.github-settings p { margin: 8px 0 0; }
+@media (max-width: 768px) {
+    .options-data-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
+    .options-update-actions { width: 100%; }
+    .options-update-actions .btn { min-height: 44px; }
+    .github-token-row { flex-wrap: wrap; }
+    .github-token-row input { font-size: 16px; }
+}
 
 #aiExportStatus {
     color: var(--advanced-muted);

@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.dispatchEvent(new CustomEvent('stockSelectionChanged'));
     }
 
-    async function loadStockData() {
+    async function loadStockData(force = false) {
         clearTimeout(stockInputTimer);
         const symbol = stockSelect.value.trim().toUpperCase();
         if (!symbol || symbol === loadedSymbol) return;
@@ -33,8 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
         expirySummary.textContent = '正在读取到期日...';
         try {
             const [quote, optionsData] = await Promise.all([
-                apiService.getStockPrice(symbol, { signal: run.signal }),
-                apiService.getOptionsData(symbol, { signal: run.signal })
+                apiService.getStockPrice(symbol, { signal: run.signal, force }),
+                apiService.getOptionsData(symbol, { signal: run.signal, force })
             ]);
             if (!gate.current(run) || symbol !== stockSelect.value.trim().toUpperCase()) return;
             const asOf = new Date().toISOString();
@@ -230,6 +230,13 @@ document.addEventListener('DOMContentLoaded', () => {
         loadStockData();
     });
     refreshOverviewBtn.addEventListener('click', updateStockPriceOverview);
+    document.addEventListener('optionsDataUpdated', event => {
+        apiService.pageCache.clear();
+        apiService.expectedOptionsSnapshotId = event.detail.snapshotId;
+        invalidateSelection();
+        if (stockSelect.value.trim()) loadStockData(true);
+        if (!refreshOverviewBtn.disabled) updateStockPriceOverview();
+    });
     initStockOverviewTable();
     updateStockPriceOverview();
     if (stockSelect.value.trim()) loadStockData();
